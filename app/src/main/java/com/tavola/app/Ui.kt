@@ -27,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -48,6 +49,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -243,6 +246,7 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
     val cat = m.catalog
     val cs = MaterialTheme.colorScheme
     var open by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
     val lf = s.from != null
     AppCard {
         val label = s.meal + (if (lf) ", avanzi di ieri sera" else if (s.mult > 1) ", quantità per cena e pranzo di domani" else "")
@@ -251,15 +255,20 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
         if (s.recipe.giornoDopo) {
             Text("Buona anche il giorno dopo", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
+        if (m.isModified(s)) {
+            Text("Ricetta modificata", style = MaterialTheme.typography.labelSmall, color = cs.primary, fontWeight = FontWeight.Bold)
+        }
         for (p in PERSONE) {
             Text(p.nome + ": " + cat.mp(s.recipe, p).riga(), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         if (!lf) {
             Row(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { open = !open }) { Text(if (open) "Nascondi ingredienti" else "Ingredienti") }
+                TextButton(onClick = { open = !open }) { Text(if (open) "Nascondi" else "Ingredienti") }
+                TextButton(onClick = { editing = true }) { Text("Modifica") }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { m.swap(idx) }) { Text("Cambia") }
             }
+            if (editing) EditDialog(m, s, idx) { editing = false }
             if (open) {
                 for ((k, q) in s.recipe.ing) {
                     val i = cat.ing.getValue(k)
@@ -360,5 +369,107 @@ fun MacroCol(nome: String, g: Double, share: Double, colore: Color) {
         Box(Modifier.width(28.dp).height(4.dp).background(colore))
         Text("${g.roundToInt()} g", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
         Text("$nome, ${(share * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+// ---- Modifica degli ingredienti di un pasto ----
+@Composable
+fun SmallBtn(label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 10.dp)) { Text(label) }
+}
+
+@Composable
+fun EditDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
+    val cat = m.catalog
+    val cs = MaterialTheme.colorScheme
+    val orig = cat.byName[s.recipe.nome]?.ing ?: s.recipe.ing
+    var draft by remember { mutableStateOf(s.recipe.ing) }
+    var picking by remember { mutableStateOf<String?>(null) }
+    val rec = s.recipe.copy(ing = draft)
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = cs.background) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Modifica gli ingredienti", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text(s.recipe.nome, color = cs.onSurfaceVariant)
+                Text(
+                    "Le porzioni si ricalcolano da sole per restare sulle calorie di ciascuno: se aumenti un ingrediente, gli altri diminuiscono un po’.",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 8.dp),
+                )
+                LazyColumn(Modifier.weight(1f)) {
+                    items(draft.keys.toList(), key = { k -> k }) { k ->
+                        val i = cat.ing.getValue(k)
+                        AppCard(Modifier.padding(vertical = 5.dp)) {
+                            Text(i.nome, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                PERSONE.joinToString(", ") { p ->
+                                    p.nome.lowercase() + " " + qty(rq(draft.getValue(k) * cat.pm(rec, p) * s.mult, i.unita), i.unita)
+                                },
+                                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                            )
+                            Row {
+                                SmallBtn("Meno") { draft = cat.scale(draft, k, 0.8) }
+                                SmallBtn("Più") { draft = cat.scale(draft, k, 1.25) }
+                                SmallBtn("Sostituisci") { picking = k }
+                                if (draft.size > 1) SmallBtn("Togli") { draft = draft - k }
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    SmallBtn("Aggiungi ingrediente") { picking = "" }
+                    if (draft != orig) SmallBtn("Ripristina") { draft = orig }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Annulla") }
+                    Button(onClick = { m.updateSlot(idx, draft); onClose() }, modifier = Modifier.weight(1f)) { Text("Salva") }
+                }
+            }
+        }
+    }
+    val pk = picking
+    if (pk != null) {
+        PickDialog(
+            cat, draft.keys,
+            onPick = { id ->
+                draft = if (pk.isEmpty()) cat.addIng(draft, id) else cat.replaceIng(draft, pk, id)
+                picking = null
+            },
+            onClose = { picking = null },
+        )
+    }
+}
+
+@Composable
+fun PickDialog(cat: Catalog, exclude: Set<String>, onPick: (String) -> Unit, onClose: () -> Unit) {
+    var q by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Scegli un ingrediente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it }, label = { Text("Cerca") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                )
+                LazyColumn(Modifier.weight(1f)) {
+                    for (rep in REPARTI) {
+                        val l = cat.ing.values
+                            .filter { it.reparto == rep && it.id !in exclude && it.nome.contains(q.trim(), ignoreCase = true) }
+                            .sortedBy { it.nome }
+                        if (l.isEmpty()) continue
+                        item(key = "pick-$rep") {
+                            Text(
+                                rep, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(l, key = { x -> x.id }) { x ->
+                            Text(x.nome, Modifier.fillMaxWidth().clickable { onPick(x.id) }.padding(vertical = 12.dp))
+                        }
+                    }
+                }
+                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Annulla") }
+            }
+        }
     }
 }

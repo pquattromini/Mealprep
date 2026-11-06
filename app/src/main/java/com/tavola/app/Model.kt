@@ -40,6 +40,16 @@ class Model(ctx: Context) {
         save()
     }
 
+    /** Cambia gli ingredienti di un pasto (e dei pranzi che ne riusano gli avanzi). */
+    fun updateSlot(idx: Int, ing: Map<String, Double>) {
+        val p = plan ?: return
+        val r = p[idx].recipe.copy(ing = ing)
+        plan = p.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r) else x }
+        save()
+    }
+
+    fun isModified(s: Slot): Boolean = catalog.byName[s.recipe.nome]?.ing != s.recipe.ing
+
     fun save() {
         val p = plan
         prefs.edit()
@@ -54,10 +64,14 @@ class Model(ctx: Context) {
     private fun encode(p: List<Slot>): String {
         val a = JSONArray()
         for (s in p) {
-            a.put(
-                JSONObject().put("d", s.day).put("m", s.meal).put("r", s.recipe.nome)
-                    .put("x", s.mult).put("f", s.from ?: -1)
-            )
+            val o = JSONObject().put("d", s.day).put("m", s.meal).put("r", s.recipe.nome)
+                .put("x", s.mult).put("f", s.from ?: -1)
+            if (isModified(s)) {
+                val io = JSONObject()
+                for ((k, v) in s.recipe.ing) io.put(k, v)
+                o.put("i", io)
+            }
+            a.put(o)
         }
         return a.toString()
     }
@@ -69,7 +83,12 @@ class Model(ctx: Context) {
             val byName = catalog.recipes.associateBy { it.nome }
             (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
                 val f = o.getInt("f")
-                Slot(o.getInt("d"), o.getString("m"), byName.getValue(o.getString("r")), o.getInt("x"), if (f >= 0) f else null)
+                var r = byName.getValue(o.getString("r"))
+                if (o.has("i")) {
+                    val io = o.getJSONObject("i")
+                    r = r.copy(ing = io.keys().asSequence().associateWith { k -> io.getDouble(k) })
+                }
+                Slot(o.getInt("d"), o.getString("m"), r, o.getInt("x"), if (f >= 0) f else null)
             }
         } catch (e: Exception) {
             null

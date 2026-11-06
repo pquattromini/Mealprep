@@ -86,6 +86,35 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
         return if (m.c + m.p > 0) m.p / (m.p + m.c) else 0.0
     }
 
+    val byName: Map<String, Recipe> = recipes.associateBy { it.nome }
+
+    private fun kcalUnit(i: Ingredient): Double = 4 * (i.carbo + i.proteine) + 9 * i.grassi
+    private fun energy(i: Ingredient, q: Double): Double = (if (i.unita == "pz") q else q / 100.0) * kcalUnit(i)
+    private fun qFor(i: Ingredient, kcal: Double): Double {
+        val u = kcalUnit(i)
+        val pz = i.unita == "pz"
+        val q = if (u <= 0.0) 0.0 else if (pz) kcal / u else kcal / u * 100.0
+        return q.coerceIn(if (pz) 0.5 else 10.0, if (pz) 4.0 else 400.0)
+    }
+
+    /** Sostituisce un ingrediente con un altro, in una quantità che porta le stesse calorie. */
+    fun replaceIng(cur: Map<String, Double>, from: String, to: String): Map<String, Double> {
+        if (from == to) return cur
+        val q = qFor(ing.getValue(to), energy(ing.getValue(from), cur.getValue(from)))
+        val out = LinkedHashMap<String, Double>()
+        for ((k, v) in cur) {
+            if (k == from) out[to] = (out[to] ?: 0.0) + q else out[k] = (out[k] ?: 0.0) + v
+        }
+        return out
+    }
+
+    /** Aggiunge un ingrediente con una quantità iniziale di circa 120 kcal. */
+    fun addIng(cur: Map<String, Double>, id: String): Map<String, Double> =
+        if (id in cur) cur else cur + (id to qFor(ing.getValue(id), 120.0))
+
+    fun scale(cur: Map<String, Double>, id: String, f: Double): Map<String, Double> =
+        cur + (id to cur.getValue(id) * f)
+
     fun build(days: Int, meals: String, leftover: Boolean): List<Slot> {
         val lunch = meals != "cena"
         val dinner = meals != "pranzo"
