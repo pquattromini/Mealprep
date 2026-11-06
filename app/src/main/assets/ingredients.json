@@ -1,0 +1,542 @@
+[
+ {
+  "id": "pasta",
+  "nome": "Pasta",
+  "unita": "g",
+  "prezzo": 1.8,
+  "reparto": "Dispensa",
+  "carbo": 75,
+  "proteine": 12,
+  "grassi": 1.5
+ },
+ {
+  "id": "riso",
+  "nome": "Riso",
+  "unita": "g",
+  "prezzo": 2.6,
+  "reparto": "Dispensa",
+  "carbo": 80,
+  "proteine": 7,
+  "grassi": 0.6
+ },
+ {
+  "id": "quinoa",
+  "nome": "Quinoa",
+  "unita": "g",
+  "prezzo": 6,
+  "reparto": "Dispensa",
+  "carbo": 64,
+  "proteine": 14,
+  "grassi": 6
+ },
+ {
+  "id": "passata",
+  "nome": "Passata di pomodoro",
+  "unita": "g",
+  "prezzo": 1.6,
+  "reparto": "Dispensa",
+  "carbo": 5,
+  "proteine": 1.3,
+  "grassi": 0.2
+ },
+ {
+  "id": "ceci",
+  "nome": "Ceci cotti",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Dispensa",
+  "carbo": 20,
+  "proteine": 8,
+  "grassi": 2.6
+ },
+ {
+  "id": "lenticchie",
+  "nome": "Lenticchie cotte",
+  "unita": "g",
+  "prezzo": 2.8,
+  "reparto": "Dispensa",
+  "carbo": 17,
+  "proteine": 9,
+  "grassi": 0.5
+ },
+ {
+  "id": "fagioli",
+  "nome": "Fagioli cotti",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Dispensa",
+  "carbo": 17,
+  "proteine": 8,
+  "grassi": 0.5
+ },
+ {
+  "id": "tonno",
+  "nome": "Tonno in scatola",
+  "unita": "g",
+  "prezzo": 10,
+  "reparto": "Dispensa",
+  "carbo": 0,
+  "proteine": 25,
+  "grassi": 1
+ },
+ {
+  "id": "pane",
+  "nome": "Pane",
+  "unita": "g",
+  "prezzo": 3,
+  "reparto": "Panetteria",
+  "carbo": 58,
+  "proteine": 9,
+  "grassi": 1
+ },
+ {
+  "id": "panini",
+  "nome": "Panini da hamburger",
+  "unita": "pz",
+  "prezzo": 0.35,
+  "reparto": "Panetteria",
+  "carbo": 30,
+  "proteine": 5,
+  "grassi": 3
+ },
+ {
+  "id": "wrap",
+  "nome": "Piadine",
+  "unita": "pz",
+  "prezzo": 0.4,
+  "reparto": "Panetteria",
+  "carbo": 28,
+  "proteine": 5,
+  "grassi": 5
+ },
+ {
+  "id": "pizza",
+  "nome": "Base per pizza",
+  "unita": "pz",
+  "prezzo": 1.2,
+  "reparto": "Panetteria",
+  "carbo": 135,
+  "proteine": 22,
+  "grassi": 4
+ },
+ {
+  "id": "patate",
+  "nome": "Patate",
+  "unita": "g",
+  "prezzo": 1.4,
+  "reparto": "Ortofrutta",
+  "carbo": 17,
+  "proteine": 2,
+  "grassi": 0.1
+ },
+ {
+  "id": "cipolle",
+  "nome": "Cipolle",
+  "unita": "g",
+  "prezzo": 1.5,
+  "reparto": "Ortofrutta",
+  "carbo": 9,
+  "proteine": 1.1,
+  "grassi": 0.1
+ },
+ {
+  "id": "carote",
+  "nome": "Carote",
+  "unita": "g",
+  "prezzo": 1.3,
+  "reparto": "Ortofrutta",
+  "carbo": 8,
+  "proteine": 1,
+  "grassi": 0.2
+ },
+ {
+  "id": "zucchine",
+  "nome": "Zucchine",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Ortofrutta",
+  "carbo": 3,
+  "proteine": 1.3,
+  "grassi": 0.3
+ },
+ {
+  "id": "melanzane",
+  "nome": "Melanzane",
+  "unita": "g",
+  "prezzo": 2.8,
+  "reparto": "Ortofrutta",
+  "carbo": 3,
+  "proteine": 1,
+  "grassi": 0.2
+ },
+ {
+  "id": "peperoni",
+  "nome": "Peperoni",
+  "unita": "g",
+  "prezzo": 3.5,
+  "reparto": "Ortofrutta",
+  "carbo": 5,
+  "proteine": 1,
+  "grassi": 0.3
+ },
+ {
+  "id": "spinaci",
+  "nome": "Spinaci",
+  "unita": "g",
+  "prezzo": 4.5,
+  "reparto": "Ortofrutta",
+  "carbo": 1.5,
+  "proteine": 3,
+  "grassi": 0.4
+ },
+ {
+  "id": "funghi",
+  "nome": "Funghi",
+  "unita": "g",
+  "prezzo": 6,
+  "reparto": "Ortofrutta",
+  "carbo": 3,
+  "proteine": 3,
+  "grassi": 0.3
+ },
+ {
+  "id": "pomodori",
+  "nome": "Pomodori",
+  "unita": "g",
+  "prezzo": 2.8,
+  "reparto": "Ortofrutta",
+  "carbo": 3.5,
+  "proteine": 1,
+  "grassi": 0.2
+ },
+ {
+  "id": "insalata",
+  "nome": "Insalata",
+  "unita": "g",
+  "prezzo": 3.5,
+  "reparto": "Ortofrutta",
+  "carbo": 2,
+  "proteine": 1.5,
+  "grassi": 0.2
+ },
+ {
+  "id": "avocado",
+  "nome": "Avocado",
+  "unita": "pz",
+  "prezzo": 1.2,
+  "reparto": "Ortofrutta",
+  "carbo": 8,
+  "proteine": 3,
+  "grassi": 21
+ },
+ {
+  "id": "pollo",
+  "nome": "Petto di pollo",
+  "unita": "g",
+  "prezzo": 9,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 23,
+  "grassi": 2
+ },
+ {
+  "id": "macinato",
+  "nome": "Macinato di manzo",
+  "unita": "g",
+  "prezzo": 10,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 20,
+  "grassi": 15
+ },
+ {
+  "id": "salsiccia",
+  "nome": "Salsiccia",
+  "unita": "g",
+  "prezzo": 8.5,
+  "reparto": "Carne e pesce",
+  "carbo": 1,
+  "proteine": 15,
+  "grassi": 25
+ },
+ {
+  "id": "pancetta",
+  "nome": "Pancetta",
+  "unita": "g",
+  "prezzo": 12,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 15,
+  "grassi": 38
+ },
+ {
+  "id": "manzo",
+  "nome": "Tagliata di manzo",
+  "unita": "g",
+  "prezzo": 24,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 22,
+  "grassi": 6
+ },
+ {
+  "id": "salmone",
+  "nome": "Salmone",
+  "unita": "g",
+  "prezzo": 20,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 20,
+  "grassi": 13
+ },
+ {
+  "id": "merluzzo",
+  "nome": "Merluzzo",
+  "unita": "g",
+  "prezzo": 13,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 18,
+  "grassi": 0.7
+ },
+ {
+  "id": "uova",
+  "nome": "Uova",
+  "unita": "pz",
+  "prezzo": 0.3,
+  "reparto": "Frigo",
+  "carbo": 0.5,
+  "proteine": 7,
+  "grassi": 6
+ },
+ {
+  "id": "mozzarella",
+  "nome": "Mozzarella",
+  "unita": "g",
+  "prezzo": 7,
+  "reparto": "Frigo",
+  "carbo": 1,
+  "proteine": 18,
+  "grassi": 19
+ },
+ {
+  "id": "parmigiano",
+  "nome": "Parmigiano",
+  "unita": "g",
+  "prezzo": 20,
+  "reparto": "Frigo",
+  "carbo": 0,
+  "proteine": 33,
+  "grassi": 28
+ },
+ {
+  "id": "cheddar",
+  "nome": "Formaggio a fette",
+  "unita": "g",
+  "prezzo": 9,
+  "reparto": "Frigo",
+  "carbo": 2,
+  "proteine": 22,
+  "grassi": 27
+ },
+ {
+  "id": "yogurt",
+  "nome": "Yogurt greco",
+  "unita": "g",
+  "prezzo": 4.5,
+  "reparto": "Frigo",
+  "carbo": 4,
+  "proteine": 9,
+  "grassi": 5
+ },
+ {
+  "id": "tofu",
+  "nome": "Tofu",
+  "unita": "g",
+  "prezzo": 9,
+  "reparto": "Frigo",
+  "carbo": 2,
+  "proteine": 12,
+  "grassi": 7
+ },
+ {
+  "id": "latte",
+  "nome": "Latte",
+  "unita": "g",
+  "prezzo": 1.6,
+  "reparto": "Frigo",
+  "carbo": 5,
+  "proteine": 3.3,
+  "grassi": 3.6
+ },
+ {
+  "id": "prosciutto",
+  "nome": "Prosciutto cotto",
+  "unita": "g",
+  "prezzo": 16,
+  "reparto": "Carne e pesce",
+  "carbo": 1,
+  "proteine": 19,
+  "grassi": 10
+ },
+ {
+  "id": "ricotta",
+  "nome": "Ricotta",
+  "unita": "g",
+  "prezzo": 6,
+  "reparto": "Frigo",
+  "carbo": 3,
+  "proteine": 9,
+  "grassi": 8
+ },
+ {
+  "id": "tortellini",
+  "nome": "Tortellini freschi",
+  "unita": "g",
+  "prezzo": 9,
+  "reparto": "Frigo",
+  "carbo": 45,
+  "proteine": 14,
+  "grassi": 8
+ },
+ {
+  "id": "sedano",
+  "nome": "Sedano",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Ortofrutta",
+  "carbo": 2,
+  "proteine": 1,
+  "grassi": 0.2
+ },
+ {
+  "id": "cavolfiore",
+  "nome": "Cavolfiore",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Ortofrutta",
+  "carbo": 4,
+  "proteine": 2.5,
+  "grassi": 0.3
+ },
+ {
+  "id": "broccoli",
+  "nome": "Broccoli",
+  "unita": "g",
+  "prezzo": 3,
+  "reparto": "Ortofrutta",
+  "carbo": 4,
+  "proteine": 3,
+  "grassi": 0.4
+ },
+ {
+  "id": "piselli",
+  "nome": "Piselli",
+  "unita": "g",
+  "prezzo": 3,
+  "reparto": "Ortofrutta",
+  "carbo": 10,
+  "proteine": 5.5,
+  "grassi": 0.5
+ },
+ {
+  "id": "zucca",
+  "nome": "Zucca",
+  "unita": "g",
+  "prezzo": 2,
+  "reparto": "Ortofrutta",
+  "carbo": 6,
+  "proteine": 1,
+  "grassi": 0.1
+ },
+ {
+  "id": "fagiolini",
+  "nome": "Fagiolini",
+  "unita": "g",
+  "prezzo": 3.2,
+  "reparto": "Ortofrutta",
+  "carbo": 5,
+  "proteine": 2,
+  "grassi": 0.2
+ },
+ {
+  "id": "gamberi",
+  "nome": "Gamberi",
+  "unita": "g",
+  "prezzo": 18,
+  "reparto": "Carne e pesce",
+  "carbo": 1,
+  "proteine": 18,
+  "grassi": 1
+ },
+ {
+  "id": "maiale",
+  "nome": "Lonza di maiale",
+  "unita": "g",
+  "prezzo": 8,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 22,
+  "grassi": 5
+ },
+ {
+  "id": "tacchino",
+  "nome": "Fesa di tacchino",
+  "unita": "g",
+  "prezzo": 10,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 23,
+  "grassi": 1.5
+ },
+ {
+  "id": "cosce",
+  "nome": "Cosce di pollo",
+  "unita": "g",
+  "prezzo": 5,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 19,
+  "grassi": 9
+ },
+ {
+  "id": "gnocchi",
+  "nome": "Gnocchi di patate",
+  "unita": "g",
+  "prezzo": 3,
+  "reparto": "Dispensa",
+  "carbo": 34,
+  "proteine": 4,
+  "grassi": 0.4
+ },
+ {
+  "id": "polenta",
+  "nome": "Farina di mais",
+  "unita": "g",
+  "prezzo": 2.5,
+  "reparto": "Dispensa",
+  "carbo": 75,
+  "proteine": 8,
+  "grassi": 1.5
+ },
+ {
+  "id": "farro",
+  "nome": "Farro",
+  "unita": "g",
+  "prezzo": 5,
+  "reparto": "Dispensa",
+  "carbo": 70,
+  "proteine": 15,
+  "grassi": 2.5
+ },
+ {
+  "id": "pesto",
+  "nome": "Pesto",
+  "unita": "g",
+  "prezzo": 12,
+  "reparto": "Dispensa",
+  "carbo": 4,
+  "proteine": 5,
+  "grassi": 40
+ }
+]

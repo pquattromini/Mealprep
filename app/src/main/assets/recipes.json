@@ -1,0 +1,690 @@
+[
+ {
+  "nome": "Pasta al pomodoro e basilico",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "passata": 100,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Pasta e ceci",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 70,
+   "ceci": 100,
+   "passata": 50,
+   "carote": 30,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Risotto ai funghi",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "riso": 80,
+   "funghi": 120,
+   "cipolle": 20,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Riso, lenticchie e zucchine",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "riso": 70,
+   "lenticchie": 100,
+   "carote": 40,
+   "zucchine": 60
+  }
+ },
+ {
+  "nome": "Curry di ceci e spinaci con riso",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "riso": 70,
+   "ceci": 120,
+   "spinaci": 100,
+   "passata": 60,
+   "cipolle": 30
+  }
+ },
+ {
+  "nome": "Parmigiana di melanzane",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "melanzane": 200,
+   "passata": 100,
+   "mozzarella": 60,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Frittata di zucchine e patate",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "uova": 2,
+   "zucchine": 100,
+   "patate": 100,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Tofu saltato con verdure e riso",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "tofu": 120,
+   "riso": 70,
+   "peperoni": 80,
+   "carote": 40
+  }
+ },
+ {
+  "nome": "Insalata di quinoa e avocado",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "quinoa": 70,
+   "avocado": 0.5,
+   "pomodori": 100,
+   "ceci": 60
+  }
+ },
+ {
+  "nome": "Pollo alla piastra con patate",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pollo": 150,
+   "patate": 150,
+   "insalata": 50
+  }
+ },
+ {
+  "nome": "Pollo, zucchine e riso",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pollo": 140,
+   "riso": 60,
+   "zucchine": 100
+  }
+ },
+ {
+  "nome": "Salmone al forno con spinaci",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "salmone": 130,
+   "patate": 150,
+   "spinaci": 80
+  }
+ },
+ {
+  "nome": "Merluzzo al pomodoro con patate",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "merluzzo": 150,
+   "passata": 80,
+   "patate": 150
+  }
+ },
+ {
+  "nome": "Spaghetti alla carbonara",
+  "giorno_dopo": false,
+  "sconsigliata_in_gravidanza": true,
+  "ingredienti": {
+   "pasta": 90,
+   "uova": 1,
+   "pancetta": 40,
+   "parmigiano": 20
+  }
+ },
+ {
+  "nome": "Pasta al ragù di manzo",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "macinato": 100,
+   "passata": 100,
+   "carote": 20,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Salsiccia e patate al forno",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "salsiccia": 150,
+   "patate": 200,
+   "cipolle": 30
+  }
+ },
+ {
+  "nome": "Hamburger con patatine al forno",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "macinato": 150,
+   "panini": 1,
+   "cheddar": 25,
+   "patate": 200,
+   "insalata": 20
+  }
+ },
+ {
+  "nome": "Wrap di pollo e insalata",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pollo": 100,
+   "wrap": 2,
+   "insalata": 30,
+   "pomodori": 50,
+   "yogurt": 30
+  }
+ },
+ {
+  "nome": "Pizza margherita",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pizza": 1,
+   "passata": 80,
+   "mozzarella": 100
+  }
+ },
+ {
+  "nome": "Nuggets di pollo al forno",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pollo": 150,
+   "patate": 150,
+   "pane": 30,
+   "uova": 0.5
+  }
+ },
+ {
+  "nome": "Burrito bowl vegano",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "riso": 70,
+   "fagioli": 100,
+   "avocado": 0.5,
+   "pomodori": 60,
+   "peperoni": 50
+  }
+ },
+ {
+  "nome": "Pasta tonno e pomodoro",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "tonno": 60,
+   "passata": 80
+  }
+ },
+ {
+  "nome": "Minestrone con pane",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "patate": 80,
+   "carote": 50,
+   "zucchine": 60,
+   "fagioli": 60,
+   "pasta": 40,
+   "pane": 40
+  }
+ },
+ {
+  "nome": "Pasta alla norma",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "melanzane": 120,
+   "passata": 100,
+   "pasta": 90,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Uova all’avocado con pane",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "uova": 2,
+   "avocado": 0.5,
+   "pane": 60
+  }
+ },
+ {
+  "nome": "Tagliata di manzo con patate",
+  "giorno_dopo": false,
+  "sconsigliata_in_gravidanza": true,
+  "ingredienti": {
+   "manzo": 150,
+   "patate": 150,
+   "insalata": 40
+  }
+ },
+ {
+  "nome": "Lasagne alla bolognese",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 80,
+   "macinato": 80,
+   "passata": 100,
+   "latte": 100,
+   "parmigiano": 20,
+   "mozzarella": 40,
+   "cipolle": 20,
+   "carote": 15
+  }
+ },
+ {
+  "nome": "Gnocchi al pomodoro e mozzarella",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "gnocchi": 200,
+   "passata": 100,
+   "mozzarella": 50,
+   "cipolle": 15
+  }
+ },
+ {
+  "nome": "Gnocchi al pesto e fagiolini",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "gnocchi": 200,
+   "pesto": 30,
+   "fagiolini": 60
+  }
+ },
+ {
+  "nome": "Tortellini al pomodoro",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "tortellini": 130,
+   "passata": 100,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Polenta con salsiccia e funghi",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "polenta": 80,
+   "salsiccia": 100,
+   "funghi": 100,
+   "passata": 50,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Risotto alla zucca",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "riso": 80,
+   "zucca": 200,
+   "cipolle": 20,
+   "parmigiano": 20
+  }
+ },
+ {
+  "nome": "Risotto piselli e prosciutto",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "riso": 80,
+   "piselli": 80,
+   "prosciutto": 30,
+   "cipolle": 20,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Zuppa di zucca e ceci",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "zucca": 200,
+   "ceci": 80,
+   "patate": 60,
+   "cipolle": 20,
+   "pane": 40
+  }
+ },
+ {
+  "nome": "Crema di broccoli e patate con crostini",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "broccoli": 150,
+   "patate": 120,
+   "pane": 40,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Passato di verdure con farro",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "farro": 60,
+   "patate": 80,
+   "carote": 50,
+   "zucchine": 60,
+   "sedano": 30,
+   "fagioli": 50
+  }
+ },
+ {
+  "nome": "Insalata di farro, tonno e pomodori",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "farro": 70,
+   "tonno": 50,
+   "pomodori": 100,
+   "peperoni": 40
+  }
+ },
+ {
+  "nome": "Pasta e fagioli",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 70,
+   "fagioli": 100,
+   "passata": 60,
+   "sedano": 20,
+   "carote": 20,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Pasta broccoli e salsiccia",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pasta": 90,
+   "broccoli": 150,
+   "salsiccia": 70
+  }
+ },
+ {
+  "nome": "Pasta al pesto e fagiolini",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pasta": 90,
+   "pesto": 30,
+   "fagiolini": 80,
+   "patate": 60
+  }
+ },
+ {
+  "nome": "Bucatini all’amatriciana",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pasta": 90,
+   "pancetta": 40,
+   "passata": 100,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Pasta con cavolfiore gratinato",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "cavolfiore": 200,
+   "parmigiano": 20,
+   "pane": 15
+  }
+ },
+ {
+  "nome": "Pasta zucchine e gamberi",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pasta": 90,
+   "gamberi": 90,
+   "zucchine": 100,
+   "pomodori": 50
+  }
+ },
+ {
+  "nome": "Pasta al forno",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "passata": 100,
+   "mozzarella": 60,
+   "prosciutto": 30,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Pasta e patate",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 70,
+   "patate": 200,
+   "passata": 30,
+   "sedano": 20,
+   "cipolle": 20,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Penne zucca e salsiccia",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 90,
+   "zucca": 150,
+   "salsiccia": 70,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Cannelloni ricotta e spinaci",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pasta": 80,
+   "ricotta": 80,
+   "spinaci": 100,
+   "passata": 100,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Polpette al sugo con pane",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "macinato": 130,
+   "uova": 0.5,
+   "pane": 40,
+   "passata": 150,
+   "parmigiano": 15
+  }
+ },
+ {
+  "nome": "Polpette di tacchino con patate",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "tacchino": 130,
+   "uova": 0.5,
+   "pane": 30,
+   "patate": 200,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Arrosto di maiale con patate",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "maiale": 150,
+   "patate": 200,
+   "cipolle": 20,
+   "carote": 30
+  }
+ },
+ {
+  "nome": "Cosce di pollo al forno con patate",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "cosce": 200,
+   "patate": 200,
+   "cipolle": 20
+  }
+ },
+ {
+  "nome": "Pollo con peperoni",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "pollo": 150,
+   "peperoni": 150,
+   "cipolle": 20,
+   "passata": 50
+  }
+ },
+ {
+  "nome": "Straccetti di pollo e zucchine",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pollo": 140,
+   "zucchine": 120,
+   "pomodori": 50,
+   "pane": 40
+  }
+ },
+ {
+  "nome": "Saltimbocca di tacchino con fagiolini",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "tacchino": 130,
+   "prosciutto": 30,
+   "patate": 150,
+   "fagiolini": 80
+  }
+ },
+ {
+  "nome": "Cotoletta di pollo al forno con insalata",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pollo": 140,
+   "uova": 0.5,
+   "pane": 40,
+   "insalata": 60,
+   "pomodori": 50
+  }
+ },
+ {
+  "nome": "Frittata di spinaci e ricotta",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "uova": 2,
+   "spinaci": 100,
+   "ricotta": 40,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Uova in purgatorio",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "uova": 2,
+   "passata": 200,
+   "cipolle": 20,
+   "pane": 60
+  }
+ },
+ {
+  "nome": "Sformato di patate e prosciutto",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "patate": 250,
+   "prosciutto": 40,
+   "mozzarella": 50,
+   "uova": 0.5,
+   "parmigiano": 10
+  }
+ },
+ {
+  "nome": "Merluzzo gratinato con broccoli",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "merluzzo": 150,
+   "pane": 20,
+   "broccoli": 150,
+   "patate": 100
+  }
+ },
+ {
+  "nome": "Salmone con zucchine e riso",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "salmone": 130,
+   "zucchine": 100,
+   "riso": 60
+  }
+ },
+ {
+  "nome": "Riso con gamberi e piselli",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "riso": 70,
+   "gamberi": 90,
+   "piselli": 60,
+   "passata": 30
+  }
+ },
+ {
+  "nome": "Tonno e fagioli con insalata",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "tonno": 60,
+   "fagioli": 120,
+   "insalata": 60,
+   "pomodori": 60,
+   "pane": 40
+  }
+ },
+ {
+  "nome": "Burger di ceci e patate al forno",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "ceci": 120,
+   "patate": 150,
+   "pane": 20,
+   "uova": 0.5,
+   "insalata": 40
+  }
+ },
+ {
+  "nome": "Quesadillas di pollo e peperoni",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "wrap": 2,
+   "pollo": 80,
+   "mozzarella": 60,
+   "peperoni": 50
+  }
+ },
+ {
+  "nome": "Pizza prosciutto e funghi",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "pizza": 1,
+   "passata": 80,
+   "mozzarella": 100,
+   "prosciutto": 40,
+   "funghi": 60
+  }
+ },
+ {
+  "nome": "Piadina con prosciutto e mozzarella",
+  "giorno_dopo": false,
+  "ingredienti": {
+   "wrap": 2,
+   "prosciutto": 50,
+   "mozzarella": 60,
+   "insalata": 30,
+   "pomodori": 50
+  }
+ },
+ {
+  "nome": "Parmigiana di zucchine",
+  "giorno_dopo": true,
+  "ingredienti": {
+   "zucchine": 250,
+   "passata": 100,
+   "mozzarella": 60,
+   "parmigiano": 15
+  }
+ }
+]
