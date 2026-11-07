@@ -19,7 +19,7 @@ object BringSync {
             var err: String? = null
             try {
                 val base = workerUrl.trim().trimEnd('/')
-                val pagina = base + "/?t=" + URLEncoder.encode("Spesa Tavola", "UTF-8") +
+                val pagina = base + "/?t=" + URLEncoder.encode("Spesa MealYourWeek", "UTF-8") +
                     "&i=" + URLEncoder.encode(righe.joinToString("\n"), "UTF-8")
                 val body = JSONObject().put("url", pagina).put("baseQuantity", "1").put("requestedQuantity", "1").toString()
                 val c = URL("https://api.getbring.com/rest/bringrecipes/deeplink").openConnection() as HttpURLConnection
