@@ -51,6 +51,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.core.content.ContextCompat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -238,6 +249,7 @@ fun MenuTab(m: Model, slots: List<Slot>) {
                 if (s.day == d) item(key = "s$i") { MealCard(m, s, i) }
             }
         }
+        item(key = "calendario") { CalendarButton(slots) }
     }
 }
 
@@ -472,4 +484,85 @@ fun PickDialog(cat: Catalog, exclude: Set<String>, onPick: (String) -> Unit, onC
             }
         }
     }
+}
+
+// ---- Invio dei pasti a Google Calendar ----
+@Composable
+fun CalendarButton(slots: List<Slot>) {
+    val ctx = LocalContext.current
+    var dialog by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    val perms = arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        if (r.values.all { it }) dialog = true else msg = "Senza il permesso per il calendario non posso inviare i pasti."
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)) {
+        Button(
+            onClick = {
+                msg = null
+                val ok = perms.all { ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED }
+                if (ok) dialog = true else launcher.launch(perms)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 14.dp),
+        ) { Text("Conferma e invia a Google Calendar") }
+        val t = msg
+        if (t != null) {
+            Text(t, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+    if (dialog) {
+        CalendarDialog(ctx, slots, onClose = { dialog = false }, onDone = { text -> msg = text; dialog = false })
+    }
+}
+
+@Composable
+fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone: (String) -> Unit) {
+    val cals = remember { CalendarSync.calendars(ctx) }
+    val lunedi = remember { LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)) }
+    var start by remember { mutableStateOf(lunedi) }
+    var cal by remember {
+        val saved = CalendarSync.savedCalendar(ctx)
+        mutableStateOf<Long?>(if (saved != null && cals.any { it.id == saved }) saved else cals.firstOrNull()?.id)
+    }
+    val fmt = remember { DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ITALY) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Invia al calendario") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (cals.isEmpty()) {
+                    Text("Non trovo nessun calendario su cui scrivere. Controlla che Google Calendar sia installato e sincronizzato con il tuo account.")
+                } else {
+                    Text("Pranzo alle ${CalendarSync.ORA_PRANZO}:00 e cena alle ${CalendarSync.ORA_CENA}:00, con il solo nome del piatto.")
+                    Text("Da quale lunedì parte il menu?", fontWeight = FontWeight.SemiBold)
+                    for (d in listOf(lunedi, lunedi.plusWeeks(1))) {
+                        Choice(d.format(fmt), start == d, Modifier.fillMaxWidth()) { start = d }
+                    }
+                    if (cals.size > 1) {
+                        Text("Su quale calendario?", fontWeight = FontWeight.SemiBold)
+                        for (c in cals) {
+                            Choice(c.nome + " (" + c.account + ")", cal == c.id, Modifier.fillMaxWidth()) { cal = c.id }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (cals.isNotEmpty()) {
+                TextButton(onClick = {
+                    val c = cal
+                    if (c != null) {
+                        try {
+                            val n = CalendarSync.send(ctx, c, slots, start)
+                            onDone("Inviati $n pasti a Google Calendar.")
+                        } catch (e: Exception) {
+                            onDone("Non sono riuscito a scrivere sul calendario.")
+                        }
+                    }
+                }) { Text("Invia") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Annulla") } },
+    )
 }
