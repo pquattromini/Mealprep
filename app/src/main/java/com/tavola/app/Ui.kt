@@ -521,7 +521,9 @@ fun CalendarButton(slots: List<Slot>) {
 
 @Composable
 fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone: (String) -> Unit) {
-    val cals = remember { CalendarSync.calendars(ctx) }
+    val tutti = remember { CalendarSync.calendars(ctx) }
+    val cals = tutti.filter { it.scrivibile && it.sincronizzato }
+    val esclusi = tutti.filter { !(it.scrivibile && it.sincronizzato) }
     val lunedi = remember { LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)) }
     var start by remember { mutableStateOf(lunedi) }
     var cal by remember {
@@ -533,7 +535,7 @@ fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone:
         onDismissRequest = onClose,
         title = { Text("Invia al calendario") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (cals.isEmpty()) {
                     Text("Non trovo nessun calendario su cui scrivere. Controlla che Google Calendar sia installato e sincronizzato con il tuo account.")
                 } else {
@@ -542,13 +544,28 @@ fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone:
                     for (d in listOf(lunedi, lunedi.plusWeeks(1))) {
                         Choice(d.format(fmt), start == d, Modifier.fillMaxWidth()) { start = d }
                     }
-                    if (cals.size > 1) {
-                        Text("Su quale calendario?", fontWeight = FontWeight.SemiBold)
-                        for (c in cals) {
-                            Choice(c.nome + " (" + c.account + ")", cal == c.id, Modifier.fillMaxWidth()) { cal = c.id }
-                        }
+                    Text("Su quale calendario?", fontWeight = FontWeight.SemiBold)
+                    for (c in cals) {
+                        Choice(
+                            if (c.nome == c.account) c.nome else c.nome + "\n" + c.account,
+                            cal == c.id, Modifier.fillMaxWidth(),
+                        ) { cal = c.id }
                     }
                 }
+                if (esclusi.isNotEmpty()) {
+                    Text(
+                        "Non utilizzabili: " + esclusi.joinToString(", ") {
+                            it.nome + (if (!it.sincronizzato) " (non sincronizzato)" else " (sola lettura)")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    "Non vedi il calendario che cerchi? Apri Google Calendar, vai in Impostazioni, tocca il tuo account e attiva la sincronizzazione di quel calendario.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         confirmButton = {

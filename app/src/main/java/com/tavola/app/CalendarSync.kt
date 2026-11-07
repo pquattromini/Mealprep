@@ -7,20 +7,20 @@ import android.provider.CalendarContract
 import java.time.LocalDate
 import java.time.ZoneId
 
-data class CalInfo(val id: Long, val nome: String, val account: String)
+data class CalInfo(val id: Long, val nome: String, val account: String, val scrivibile: Boolean, val sincronizzato: Boolean)
 
 /** Scrive i pasti nel calendario del telefono, che Google Calendar sincronizza da solo. */
 object CalendarSync {
     const val ORA_PRANZO = 13      // ora di inizio dell'evento del pranzo
     const val ORA_CENA = 20        // ora di inizio dell'evento della cena
     const val DURATA_MIN = 60      // durata degli eventi, in minuti
-    const val PROMEMORIA_MIN = 0  // notifica prima dell'evento (0 = nessuna notifica)
+    const val PROMEMORIA_MIN = 30  // notifica prima dell'evento (0 = nessuna notifica)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE)
 
     fun savedCalendar(ctx: Context): Long? = prefs(ctx).getLong("calId", -1L).takeIf { it >= 0 }
 
-    /** Calendari su cui si può scrivere (esclusi quelli di sola lettura, come compleanni e festività). */
+    /** Tutti i calendari che il telefono conosce, con l'indicazione se si può scrivere e se sono sincronizzati con Google. */
     fun calendars(ctx: Context): List<CalInfo> {
         val out = ArrayList<CalInfo>()
         val proj = arrayOf(
@@ -28,12 +28,17 @@ object CalendarSync {
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
             CalendarContract.Calendars.ACCOUNT_NAME,
             CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL,
+            CalendarContract.Calendars.SYNC_EVENTS,
         )
         ctx.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, proj, null, null, null)?.use { c ->
             while (c.moveToNext()) {
-                if (c.getInt(3) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) {
-                    out.add(CalInfo(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: ""))
-                }
+                out.add(
+                    CalInfo(
+                        c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "",
+                        c.getInt(3) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR,
+                        c.getInt(4) == 1,
+                    )
+                )
             }
         }
         return out
