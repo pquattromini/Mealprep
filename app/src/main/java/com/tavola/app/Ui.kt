@@ -53,6 +53,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -331,6 +333,7 @@ fun ShopTab(m: Model, lista: List<Item>) {
                 modifier = Modifier.padding(top = 20.dp),
             )
         }
+        item(key = "bring") { BringButton(m, lista) }
     }
 }
 
@@ -565,4 +568,70 @@ fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone:
         },
         dismissButton = { TextButton(onClick = onClose) { Text("Annulla") } },
     )
+}
+
+// ---- Invio della lista a Bring! ----
+fun bringRiga(x: Item): String =
+    if (x.unita == "pz") num(x.q) + " " + x.nome else qty(x.q, x.unita) + " " + x.nome
+
+@Composable
+fun BringButton(m: Model, lista: List<Item>) {
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE) }
+    // da comprare = tutto ciò che NON è stato spuntato
+    val daComprare = lista.filter { it.id !in m.checked }.sortedWith(compareBy({ REPARTI.indexOf(it.reparto) }, { it.nome }))
+    var dialog by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf(prefs.getString("bringUrl", "") ?: "") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 24.dp)) {
+        Button(
+            onClick = { msg = null; dialog = true },
+            enabled = daComprare.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 14.dp),
+        ) { Text("Invia a Bring (${daComprare.size} da comprare)") }
+        val t = msg
+        if (t != null) {
+            Text(t, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+    if (dialog) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) dialog = false },
+            title = { Text("Invia a Bring") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Verranno inviati ${daComprare.size} ingredienti. Quelli che hai già spuntato restano fuori.")
+                    OutlinedTextField(
+                        value = url, onValueChange = { url = it }, label = { Text("Indirizzo del tuo Worker") },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && url.isNotBlank(),
+                    onClick = {
+                        busy = true
+                        prefs.edit().putString("bringUrl", url.trim()).apply()
+                        BringSync.deeplink(url, daComprare.map { bringRiga(it) }) { link, err ->
+                            busy = false
+                            dialog = false
+                            if (link != null) {
+                                try {
+                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link)))
+                                } catch (e: Exception) {
+                                    msg = "Non riesco ad aprire Bring. È installata?"
+                                }
+                            } else {
+                                msg = err
+                            }
+                        }
+                    },
+                ) { Text(if (busy) "Invio in corso" else "Invia") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = false }, enabled = !busy) { Text("Annulla") } },
+        )
+    }
 }
