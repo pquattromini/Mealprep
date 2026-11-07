@@ -175,7 +175,7 @@ fun TavolaApp() {
 @Composable
 fun SetupScreen(m: Model) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Tavola", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+        Text("MealYourWeek", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
         Text("Menu e spesa della settimana", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Question("Per quanti giorni a settimana?")
