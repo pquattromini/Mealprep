@@ -2,6 +2,8 @@ package com.tavola.app
 
 import android.content.Context
 import org.json.JSONArray
+import org.json.JSONException
+import java.io.File
 import kotlin.math.ceil
 import kotlin.random.Random
 
@@ -35,6 +37,7 @@ val PERSONE = listOf(
 data class Ingredient(
     val id: String, val nome: String, val unita: String, val prezzo: Double,
     val reparto: String, val carbo: Double, val proteine: Double, val grassi: Double,
+    val tipo: String = "",   // facoltativo: "carbo" o "proteine"
 )
 
 data class Recipe(val nome: String, val giornoDopo: Boolean, val evitaGravidanza: Boolean, val ing: Map<String, Double>)
@@ -178,25 +181,76 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
 
     companion object {
         fun load(ctx: Context): Catalog {
-            fun read(name: String) = ctx.assets.open(name).bufferedReader().use { it.readText() }
-            val ia = JSONArray(read("ingredients.json"))
-            val ing = (0 until ia.length()).map { ia.getJSONObject(it) }.map { o ->
-                Ingredient(
-                    o.getString("id"), o.getString("nome"), o.getString("unita"), o.getDouble("prezzo"),
-                    o.getString("reparto"), o.getDouble("carbo"), o.getDouble("proteine"), o.getDouble("grassi"),
-                )
-            }.associateBy { it.id }
-            val ra = JSONArray(read("recipes.json"))
-            val rec = (0 until ra.length()).map { ra.getJSONObject(it) }.map { o ->
-                val io = o.getJSONObject("ingredienti")
-                // meno carboidrati (x0,6) e più proteine (x1,2), come nel prototipo
-                val m = io.keys().asSequence().associateWith { k ->
-                    val f = if (k in CARB) 0.6 else if (k in PROT) 1.2 else 1.0
-                    io.getDouble(k) * f
+            val fi = File(ctx.filesDir, "ingredients.json")
+            val fr = File(ctx.filesDir, "recipes.json")
+            if (fi.exists() && fr.exists()) {
+                try {
+                    return parse(fi.readText(), fr.readText())
+                } catch (e: Exception) {
+                    // la copia scaricata non è valida: si usa quella inclusa nell'app
                 }
-                Recipe(o.getString("nome"), o.optBoolean("giorno_dopo", false), o.optBoolean("sconsigliata_in_gravidanza", false), m)
             }
-            return Catalog(ing, rec)
+            fun asset(name: String) = ctx.assets.open(name).bufferedReader().use { it.readText() }
+            return parse(asset("ingredients.json"), asset("recipes.json"))
+        }
+
+        /** Legge e controlla i due file; se c'è un errore lancia un'eccezione con un messaggio comprensibile. */
+        fun parse(ingJson: String, recJson: String): Catalog {
+            try {
+                val ia = JSONArray(ingJson)
+                val ing = (0 until ia.length()).map { ia.getJSONObject(it) }.map { o ->
+                    Ingredient(
+                        o.getString("id"), o.getString("nome"), o.getString("unita"), o.getDouble("prezzo"),
+                        o.getString("reparto"), o.getDouble("carbo"), o.getDouble("proteine"), o.getDouble("grassi"),
+                        o.optString("tipo", ""),
+                    )
+                }
+                val ingMap = ing.associateBy { it.id }
+                if (ingMap.size != ing.size) {
+                    throw IllegalArgumentException("In ingredients.json ci sono due ingredienti con lo stesso id.")
+                }
+                for (i in ing) {
+                    if (i.reparto !in REPARTI) {
+                        throw IllegalArgumentException("Ingrediente “${i.nome}”: il reparto “${i.reparto}” non esiste. Usa uno tra: ${REPARTI.joinToString(", ")}.")
+                    }
+                    if (i.unita != "g" && i.unita != "pz") {
+                        throw IllegalArgumentException("Ingrediente “${i.nome}”: l’unità deve essere g oppure pz.")
+                    }
+                }
+                val ra = JSONArray(recJson)
+                val rec = (0 until ra.length()).map { ra.getJSONObject(it) }.map { o ->
+                    val nome = o.getString("nome")
+                    val io = o.getJSONObject("ingredienti")
+                    val m = LinkedHashMap<String, Double>()
+                    val keys = io.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        val i = ingMap[k]
+                            ?: throw IllegalArgumentException("La ricetta “$nome” usa l’ingrediente “$k”, che non esiste in ingredients.json.")
+                        val q = io.getDouble(k)
+                        if (q <= 0) throw IllegalArgumentException("Ricetta “$nome”: la quantità di “$k” deve essere maggiore di zero.")
+                        // meno carboidrati (x0,6) e più proteine (x1,2), come nel prototipo
+                        val f = when {
+                            i.tipo == "carbo" -> 0.6
+                            i.tipo == "proteine" -> 1.2
+                            i.tipo.isEmpty() && k in CARB -> 0.6
+                            i.tipo.isEmpty() && k in PROT -> 1.2
+                            else -> 1.0
+                        }
+                        m[k] = q * f
+                    }
+                    if (m.isEmpty()) throw IllegalArgumentException("La ricetta “$nome” non ha ingredienti.")
+                    Recipe(nome, o.optBoolean("giorno_dopo", false), o.optBoolean("sconsigliata_in_gravidanza", false), m)
+                }
+                if (rec.isEmpty()) throw IllegalArgumentException("Non ci sono ricette in recipes.json.")
+                val nomi = HashSet<String>()
+                for (r in rec) {
+                    if (!nomi.add(r.nome)) throw IllegalArgumentException("La ricetta “${r.nome}” compare due volte.")
+                }
+                return Catalog(ingMap, rec)
+            } catch (e: JSONException) {
+                throw IllegalArgumentException("Errore nel formato del file: controlla virgole, virgolette e parentesi. (${e.message})")
+            }
         }
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -155,6 +156,15 @@ fun Question(t: String, hint: String? = null) {
 fun TavolaApp() {
     val ctx = LocalContext.current
     val m = remember { Model(ctx.applicationContext) }
+    // all'apertura controlla se ci sono ricette e ingredienti più recenti (se hai impostato l'indirizzo)
+    LaunchedEffect(Unit) {
+        val u = ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE).getString("dataUrl", "") ?: ""
+        if (u.isNotBlank()) {
+            Updater.aggiorna(ctx.applicationContext, u) { cambiato, _, _ ->
+                if (cambiato) m.reload(ctx.applicationContext)
+            }
+        }
+    }
     Scaffold { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (m.editing || m.plan == null) SetupScreen(m) else ResultScreen(m)
@@ -200,6 +210,7 @@ fun SetupScreen(m: Model) {
         if (m.plan != null) {
             TextButton(onClick = { m.editing = false }, modifier = Modifier.fillMaxWidth()) { Text("Torna al menu") }
         }
+        UpdateButton(m)
     }
 }
 
@@ -647,6 +658,61 @@ fun BringButton(m: Model, lista: List<Item>) {
                         }
                     },
                 ) { Text(if (busy) "Invio in corso" else "Invia") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = false }, enabled = !busy) { Text("Annulla") } },
+        )
+    }
+}
+
+// ---- Aggiornamento di ricette e ingredienti da internet ----
+@Composable
+fun UpdateButton(m: Model) {
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE) }
+    var dialog by remember { mutableStateOf(false) }
+    var url by remember { mutableStateOf(prefs.getString("dataUrl", "") ?: "") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        TextButton(onClick = { msg = null; dialog = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Aggiorna ricette e ingredienti")
+        }
+        val t = msg
+        if (t != null) {
+            Text(t, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+    if (dialog) {
+        AlertDialog(
+            onDismissRequest = { if (!busy) dialog = false },
+            title = { Text("Aggiorna ricette") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Su GitHub apri recipes.json, tocca “Raw” e incolla qui l’indirizzo che vedi nella barra.")
+                    OutlinedTextField(
+                        value = url, onValueChange = { url = it }, label = { Text("Indirizzo del file") },
+                        maxLines = 3, modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy && url.isNotBlank(),
+                    onClick = {
+                        busy = true
+                        prefs.edit().putString("dataUrl", url.trim()).apply()
+                        Updater.aggiorna(ctx.applicationContext, url) { cambiato, messaggio, errore ->
+                            busy = false
+                            dialog = false
+                            if (errore != null) {
+                                msg = errore
+                            } else {
+                                if (cambiato) m.reload(ctx.applicationContext)
+                                msg = messaggio
+                            }
+                        }
+                    },
+                ) { Text(if (busy) "Scarico" else "Scarica") }
             },
             dismissButton = { TextButton(onClick = { dialog = false }, enabled = !busy) { Text("Annulla") } },
         )

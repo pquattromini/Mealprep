@@ -10,7 +10,7 @@ import org.json.JSONObject
 
 /** Stato dell'app. Menu, impostazioni e spunte della spesa restano salvati sul telefono. */
 class Model(ctx: Context) {
-    val catalog = Catalog.load(ctx)
+    var catalog by mutableStateOf(Catalog.load(ctx))
     private val prefs = ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE)
 
     var days by mutableIntStateOf(prefs.getInt("days", 7))
@@ -20,6 +20,13 @@ class Model(ctx: Context) {
     var checked by mutableStateOf<Set<String>>(prefs.getStringSet("checked", emptySet())?.toSet() ?: emptySet())
     var editing by mutableStateOf(plan == null)
     var tab by mutableIntStateOf(0)
+
+    /** Ricarica ricette e ingredienti (dopo un aggiornamento) e riadatta il menu salvato ai dati nuovi. */
+    fun reload(ctx: Context) {
+        catalog = Catalog.load(ctx)
+        plan = loadPlan()
+        if (plan == null) editing = true
+    }
 
     fun generate() {
         plan = catalog.build(days, meals, leftover)
@@ -81,7 +88,7 @@ class Model(ctx: Context) {
         return try {
             val arr = JSONArray(raw)
             val byName = catalog.recipes.associateBy { it.nome }
-            (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
+            val slots = (0 until arr.length()).map { arr.getJSONObject(it) }.map { o ->
                 val f = o.getInt("f")
                 var r = byName.getValue(o.getString("r"))
                 if (o.has("i")) {
@@ -90,6 +97,7 @@ class Model(ctx: Context) {
                 }
                 Slot(o.getInt("d"), o.getString("m"), r, o.getInt("x"), if (f >= 0) f else null)
             }
+            if (slots.any { s -> s.recipe.ing.keys.any { it !in catalog.ing } }) null else slots
         } catch (e: Exception) {
             null
         }
