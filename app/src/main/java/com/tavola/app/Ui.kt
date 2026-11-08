@@ -276,11 +276,11 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
     AppCard {
         val label = s.meal + (if (lf) ", avanzi di ieri sera" else if (s.mult > 1) ", quantità per cena e pranzo di domani" else "")
         Text(label, style = MaterialTheme.typography.labelMedium, color = cs.primary, fontWeight = FontWeight.Bold)
-        Text(s.recipe.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(s.titolo ?: s.recipe.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (s.recipe.giornoDopo) {
             Text("Buona anche il giorno dopo", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
-        if (m.isModified(s)) {
+        if (m.isModified(s) || s.titolo != null) {
             Text("Ricetta modificata", style = MaterialTheme.typography.labelSmall, color = cs.primary, fontWeight = FontWeight.Bold)
         }
         for (p in PERSONE) {
@@ -412,11 +412,21 @@ fun EditDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
     var draft by remember { mutableStateOf(s.recipe.ing) }
     var picking by remember { mutableStateOf<String?>(null) }
     val rec = s.recipe.copy(ing = draft)
+    var titolo by remember { mutableStateOf(s.titolo ?: s.recipe.nome) }
+    var manuale by remember { mutableStateOf(false) }
+    // quando cambiano i macroingredienti il titolo si aggiorna da solo, finché non lo scrivi tu a mano
+    fun cambia(nuovo: Map<String, Double>) {
+        if (!manuale) titolo = cat.titoloAggiornato(titolo, draft.keys, nuovo.keys)
+        draft = nuovo
+    }
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = cs.background) {
             Column(Modifier.padding(16.dp)) {
                 Text("Modifica gli ingredienti", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                Text(s.recipe.nome, color = cs.onSurfaceVariant)
+                OutlinedTextField(
+                    value = titolo, onValueChange = { titolo = it; manuale = true }, label = { Text("Nome del piatto") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
                 Text(
                     "Le porzioni si ricalcolano da sole per restare sulle calorie di ciascuno: se aumenti un ingrediente, gli altri diminuiscono un po’.",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
@@ -437,18 +447,18 @@ fun EditDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
                                 SmallBtn("Meno") { draft = cat.scale(draft, k, 0.8) }
                                 SmallBtn("Più") { draft = cat.scale(draft, k, 1.25) }
                                 SmallBtn("Sostituisci") { picking = k }
-                                if (draft.size > 1) SmallBtn("Togli") { draft = draft - k }
+                                if (draft.size > 1) SmallBtn("Togli") { cambia(draft - k) }
                             }
                         }
                     }
                 }
                 Row(Modifier.fillMaxWidth()) {
                     SmallBtn("Aggiungi ingrediente") { picking = "" }
-                    if (draft != orig) SmallBtn("Ripristina") { draft = orig }
+                    if (draft != orig || titolo != s.recipe.nome) SmallBtn("Ripristina") { titolo = s.recipe.nome; manuale = false; draft = orig }
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Annulla") }
-                    Button(onClick = { m.updateSlot(idx, draft); onClose() }, modifier = Modifier.weight(1f)) { Text("Salva") }
+                    Button(onClick = { m.updateSlot(idx, draft, titolo); onClose() }, modifier = Modifier.weight(1f)) { Text("Salva") }
                 }
             }
         }
@@ -458,7 +468,7 @@ fun EditDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
         PickDialog(
             cat, draft.keys,
             onPick = { id ->
-                draft = if (pk.isEmpty()) cat.addIng(draft, id) else cat.replaceIng(draft, pk, id)
+                cambia(if (pk.isEmpty()) cat.addIng(draft, id) else cat.replaceIng(draft, pk, id))
                 picking = null
             },
             onClose = { picking = null },

@@ -48,10 +48,11 @@ class Model(ctx: Context) {
     }
 
     /** Cambia gli ingredienti di un pasto (e dei pranzi che ne riusano gli avanzi). */
-    fun updateSlot(idx: Int, ing: Map<String, Double>) {
+    fun updateSlot(idx: Int, ing: Map<String, Double>, titolo: String? = null) {
         val p = plan ?: return
         val r = p[idx].recipe.copy(ing = ing)
-        plan = p.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r) else x }
+        val t = titolo?.trim()?.takeIf { it.isNotEmpty() && it != r.nome }
+        plan = p.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r, titolo = t) else x }
         save()
     }
 
@@ -78,6 +79,7 @@ class Model(ctx: Context) {
                 for ((k, v) in s.recipe.ing) io.put(k, v)
                 o.put("i", io)
             }
+            if (s.titolo != null) o.put("t", s.titolo)
             a.put(o)
         }
         return a.toString()
@@ -95,7 +97,7 @@ class Model(ctx: Context) {
                     val io = o.getJSONObject("i")
                     r = r.copy(ing = io.keys().asSequence().associateWith { k -> io.getDouble(k) })
                 }
-                Slot(o.getInt("d"), o.getString("m"), r, o.getInt("x"), if (f >= 0) f else null)
+                Slot(o.getInt("d"), o.getString("m"), r, o.getInt("x"), if (f >= 0) f else null, o.optString("t", "").takeIf { it.isNotEmpty() })
             }
             if (slots.any { s -> s.recipe.ing.keys.any { it !in catalog.ing } }) null else slots
         } catch (e: Exception) {

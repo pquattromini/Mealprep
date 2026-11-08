@@ -63,7 +63,8 @@ object CalendarSync {
         for (s in slots) {
             val ora = if (s.meal == "Pranzo") ORA_PRANZO else ORA_CENA
             val begin = start.plusDays(s.day.toLong()).atTime(ora, 0).atZone(zone).toInstant().toEpochMilli()
-            val titolo = if (s.from != null) s.recipe.nome + " (avanzi)" else s.recipe.nome
+            val nome = s.titolo ?: s.recipe.nome
+            val titolo = if (s.from != null) "$nome (avanzi)" else nome
             val v = ContentValues().apply {
                 put(CalendarContract.Events.CALENDAR_ID, calId)
                 put(CalendarContract.Events.TITLE, titolo)

@@ -15,6 +15,22 @@ const val GRAVIDANZA = true   // metti false dopo il parto: riattiva le ricette 
 val CARB = setOf("pasta", "riso", "quinoa", "pane", "panini", "wrap", "pizza", "patate", "gnocchi", "polenta", "farro", "tortellini")
 val PROT = setOf("pollo", "tacchino", "cosce", "manzo", "maiale", "macinato", "salmone", "merluzzo", "gamberi", "tofu", "ricotta", "yogurt")
 val REPARTI = listOf("Ortofrutta", "Carne e pesce", "Frigo", "Panetteria", "Dispensa")
+
+// Parola usata nei titoli dei piatti: solo per i macroingredienti (i condimenti non cambiano il titolo).
+// Per un ingrediente nuovo si può aggiungere in ingredients.json il campo "titolo".
+val PAROLE_TITOLO = mapOf(
+    "pollo" to "pollo", "tacchino" to "tacchino", "cosce" to "cosce di pollo", "manzo" to "manzo", "macinato" to "manzo",
+    "maiale" to "maiale", "salsiccia" to "salsiccia", "pancetta" to "pancetta", "prosciutto" to "prosciutto",
+    "salmone" to "salmone", "merluzzo" to "merluzzo", "gamberi" to "gamberi", "tonno" to "tonno", "uova" to "uova",
+    "tofu" to "tofu", "ricotta" to "ricotta", "mozzarella" to "mozzarella",
+    "pasta" to "pasta", "riso" to "riso", "quinoa" to "quinoa", "pane" to "pane", "patate" to "patate",
+    "gnocchi" to "gnocchi", "polenta" to "polenta", "farro" to "farro", "tortellini" to "tortellini",
+    "ceci" to "ceci", "lenticchie" to "lenticchie", "fagioli" to "fagioli",
+    "zucchine" to "zucchine", "melanzane" to "melanzane", "peperoni" to "peperoni", "spinaci" to "spinaci",
+    "funghi" to "funghi", "pomodori" to "pomodori", "insalata" to "insalata", "avocado" to "avocado",
+    "broccoli" to "broccoli", "cavolfiore" to "cavolfiore", "piselli" to "piselli", "zucca" to "zucca",
+    "fagiolini" to "fagiolini", "pesto" to "pesto",
+)
 val GIORNI = listOf("Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica")
 
 data class Person(
@@ -38,6 +54,7 @@ data class Ingredient(
     val id: String, val nome: String, val unita: String, val prezzo: Double,
     val reparto: String, val carbo: Double, val proteine: Double, val grassi: Double,
     val tipo: String = "",   // facoltativo: "carbo" o "proteine"
+    val parola: String = "", // facoltativo: parola per i titoli dei piatti (solo macroingredienti)
 )
 
 data class Recipe(val nome: String, val giornoDopo: Boolean, val evitaGravidanza: Boolean, val ing: Map<String, Double>)
@@ -48,7 +65,7 @@ data class Macros(val c: Double, val p: Double, val f: Double) {
     operator fun times(x: Double) = Macros(c * x, p * x, f * x)
 }
 
-data class Slot(val day: Int, val meal: String, val recipe: Recipe, val mult: Int, val from: Int?)
+data class Slot(val day: Int, val meal: String, val recipe: Recipe, val mult: Int, val from: Int?, val titolo: String? = null)
 
 data class Item(val id: String, val nome: String, val unita: String, val reparto: String, val q: Double, val costo: Double)
 
@@ -118,6 +135,16 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
     fun scale(cur: Map<String, Double>, id: String, f: Double): Map<String, Double> =
         cur + (id to cur.getValue(id) * f)
 
+    private fun parola(id: String): String? {
+        val i = ing[id] ?: return null
+        val p = if (i.parola.isNotEmpty()) i.parola else (PAROLE_TITOLO[id] ?: "")
+        return if (p.isEmpty()) null else p
+    }
+
+    /** Nuovo titolo del piatto dopo aver cambiato gli ingredienti (conta solo chi ha una parola per i titoli). */
+    fun titoloAggiornato(titolo: String, prima: Set<String>, dopo: Set<String>): String =
+        Titoli.aggiorna(titolo, (prima - dopo).mapNotNull { parola(it) }, (dopo - prima).mapNotNull { parola(it) })
+
     fun build(days: Int, meals: String, leftover: Boolean): List<Slot> {
         val lunch = meals != "cena"
         val dinner = meals != "pranzo"
@@ -158,7 +185,7 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
         val l = if (c.isNotEmpty()) c else pl.filter { it != s.recipe }
         if (l.isEmpty()) return slots
         val p = l.sortedByDescending { pq(it) }.take(8).random()
-        return slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = p) else x }
+        return slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = p, titolo = null) else x }
     }
 
     fun shopping(slots: List<Slot>): List<Item> {
@@ -203,6 +230,7 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
                         o.getString("id"), o.getString("nome"), o.getString("unita"), o.getDouble("prezzo"),
                         o.getString("reparto"), o.getDouble("carbo"), o.getDouble("proteine"), o.getDouble("grassi"),
                         o.optString("tipo", ""),
+                        o.optString("titolo", ""),
                     )
                 }
                 val ingMap = ing.associateBy { it.id }
