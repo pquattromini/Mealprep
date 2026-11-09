@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Tavola" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Schermata di avvio: mostra l'icona, poi l'app passa al tema normale (Theme.Tavola) -->
+    <style name="Theme.Tavola.Avvio" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/sfondo_avvio</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_avvio</item>
+        <item name="postSplashScreenTheme">@style/Theme.Tavola</item>
+    </style>
 </resources>
