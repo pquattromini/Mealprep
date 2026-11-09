@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.LocalDate
 
 /** Stato dell'app. Menu, impostazioni e spunte della spesa restano salvati sul telefono. */
 class Model(ctx: Context) {
@@ -20,16 +21,26 @@ class Model(ctx: Context) {
     var checked by mutableStateOf<Set<String>>(prefs.getStringSet("checked", emptySet())?.toSet() ?: emptySet())
     var editing by mutableStateOf(plan == null)
     var tab by mutableIntStateOf(0)
+    /** Il lunedì della settimana a cui appartiene il menù mostrato (c'è dopo l'invio al calendario o dopo un recupero). */
+    var inizioMenu by mutableStateOf<LocalDate?>(
+        prefs.getString("inizio", null)?.let {
+            try { LocalDate.parse(it) } catch (e: Exception) { null }
+        }
+    )
 
     /** Ricarica ricette e ingredienti (dopo un aggiornamento) e riadatta il menu salvato ai dati nuovi. */
     fun reload(ctx: Context) {
         catalog = Catalog.load(ctx)
         plan = loadPlan()
-        if (plan == null) editing = true
+        if (plan == null) {
+            editing = true
+            inizioMenu = null
+        }
     }
 
     fun generate() {
         plan = catalog.build(days, meals, leftover)
+        inizioMenu = null
         checked = emptySet()
         tab = 0
         editing = false
@@ -58,6 +69,56 @@ class Model(ctx: Context) {
 
     fun isModified(s: Slot): Boolean = catalog.byName[s.recipe.nome]?.ing != s.recipe.ing
 
+    private fun leggiArchivio(): JSONObject =
+        try { JSONObject(prefs.getString("archivio", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+
+    /** Salva il menù mostrato come menù di quella settimana: ne resta uno solo per settimana, l'ultimo inviato. */
+    fun archivia(inizio: LocalDate) {
+        val p = plan ?: return
+        val arc = leggiArchivio()
+        arc.put(
+            inizio.toString(),
+            JSONObject().put("p", encode(p)).put("d", days).put("m", meals).put("l", leftover),
+        )
+        // si tengono al massimo le ultime 12 settimane
+        val chiavi = arc.keys().asSequence().toList().sorted()
+        for (k in chiavi.dropLast(12)) arc.remove(k)
+        prefs.edit().putString("archivio", arc.toString()).apply()
+        inizioMenu = inizio
+        save()
+    }
+
+    /** Le settimane con un menù salvato, dalla più recente. */
+    fun settimane(): List<Settimana> {
+        val arc = leggiArchivio()
+        val out = ArrayList<Settimana>()
+        for (k in arc.keys().asSequence().toList()) {
+            try {
+                val n = decode(arc.getJSONObject(k).getString("p"))?.size ?: 0
+                if (n > 0) out.add(Settimana(LocalDate.parse(k), n))
+            } catch (e: Exception) {
+                // voce non leggibile: la salto
+            }
+        }
+        return out.sortedByDescending { it.inizio.toEpochDay() }
+    }
+
+    /** Ricarica il menù salvato per quella settimana, con le modifiche e i titoli com'erano al momento dell'invio. */
+    fun recupera(inizio: LocalDate): Boolean {
+        val o = try { leggiArchivio().getJSONObject(inizio.toString()) } catch (e: Exception) { return false }
+        val p = decode(o.getString("p")) ?: return false
+        days = o.optInt("d", days)
+        meals = o.optString("m", meals)
+        leftover = o.optBoolean("l", leftover)
+        plan = p
+        inizioMenu = inizio
+        checked = emptySet()
+        tab = 0
+        editing = false
+        save()
+        return true
+    }
+
     fun save() {
         val p = plan
         prefs.edit()
@@ -66,6 +127,7 @@ class Model(ctx: Context) {
             .putBoolean("leftover", leftover)
             .putString("plan", if (p == null) null else encode(p))
             .putStringSet("checked", checked)
+            .putString("inizio", inizioMenu?.toString())
             .apply()
     }
 
@@ -85,8 +147,10 @@ class Model(ctx: Context) {
         return a.toString()
     }
 
-    private fun loadPlan(): List<Slot>? {
-        val raw = prefs.getString("plan", null) ?: return null
+    private fun loadPlan(): List<Slot>? = decode(prefs.getString("plan", null))
+
+    private fun decode(raw: String?): List<Slot>? {
+        if (raw == null) return null
         return try {
             val arr = JSONArray(raw)
             val byName = catalog.recipes.associateBy { it.nome }
@@ -105,3 +169,6 @@ class Model(ctx: Context) {
         }
     }
 }
+
+/** Una settimana (con il suo lunedì) per cui c'è un menù salvato. */
+data class Settimana(val inizio: LocalDate, val pasti: Int)

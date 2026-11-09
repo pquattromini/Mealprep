@@ -27,6 +27,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -207,6 +208,8 @@ fun SetupScreen(m: Model) {
             contentPadding = PaddingValues(vertical = 14.dp),
         ) { Text("Crea il menu") }
 
+        RecuperaButton(m)
+
         if (m.plan != null) {
             TextButton(onClick = { m.editing = false }, modifier = Modifier.fillMaxWidth()) { Text("Torna al menu") }
         }
@@ -245,6 +248,16 @@ fun MenuTab(m: Model, slots: List<Slot>) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        val ini = m.inizioMenu
+        if (ini != null) {
+            item(key = "inizio") {
+                Text(
+                    "Menù della settimana da " + dataIt(ini),
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
         for (d in 0 until nDays) {
             item(key = "h$d") {
                 Column(Modifier.padding(top = 10.dp)) {
@@ -262,7 +275,7 @@ fun MenuTab(m: Model, slots: List<Slot>) {
                 if (s.day == d) item(key = "s$i") { MealCard(m, s, i) }
             }
         }
-        item(key = "calendario") { CalendarButton(slots) }
+        item(key = "calendario") { CalendarButton(m, slots) }
     }
 }
 
@@ -512,7 +525,7 @@ fun PickDialog(cat: Catalog, exclude: Set<String>, onPick: (String) -> Unit, onC
 
 // ---- Invio dei pasti a Google Calendar ----
 @Composable
-fun CalendarButton(slots: List<Slot>) {
+fun CalendarButton(m: Model, slots: List<Slot>) {
     val ctx = LocalContext.current
     var dialog by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
@@ -536,17 +549,33 @@ fun CalendarButton(slots: List<Slot>) {
         }
     }
     if (dialog) {
-        CalendarDialog(ctx, slots, onClose = { dialog = false }, onDone = { text -> msg = text; dialog = false })
+        CalendarDialog(
+            ctx, slots, m.catalog.recipes.map { it.nome }, m.inizioMenu,
+            onInviato = { d -> m.archivia(d) },
+            onClose = { dialog = false },
+            onDone = { text -> msg = text; dialog = false },
+        )
     }
 }
 
 @Composable
-fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone: (String) -> Unit) {
+fun CalendarDialog(
+    ctx: Context, slots: List<Slot>, nomi: List<String>, preferito: LocalDate?,
+    onInviato: (LocalDate) -> Unit, onClose: () -> Unit, onDone: (String) -> Unit,
+) {
     val tutti = remember { CalendarSync.calendars(ctx) }
     val cals = tutti.filter { it.scrivibile && it.sincronizzato }
     val esclusi = tutti.filter { !(it.scrivibile && it.sincronizzato) }
-    val lunedi = remember { LocalDate.now().with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY)) }
-    var start by remember { mutableStateOf(lunedi) }
+    // il lunedì di questa settimana (per rimandare un menu già in corso), il prossimo e quello dopo
+    val opzioni = remember {
+        val oggi = LocalDate.now()
+        val questa = oggi.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val prossimo = oggi.with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY))
+        (listOfNotNull(preferito) + listOf(questa, prossimo, prossimo.plusWeeks(1))).distinct().sortedBy { it.toEpochDay() }
+    }
+    var start by remember {
+        mutableStateOf(preferito ?: CalendarSync.lastStart(ctx)?.takeIf { it in opzioni } ?: opzioni.first { !it.isBefore(LocalDate.now()) })
+    }
     var cal by remember {
         val saved = CalendarSync.savedCalendar(ctx)
         mutableStateOf<Long?>(if (saved != null && cals.any { it.id == saved }) saved else cals.firstOrNull()?.id)
@@ -562,7 +591,7 @@ fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone:
                 } else {
                     Text("Pranzo alle ${CalendarSync.ORA_PRANZO}:00 e cena alle ${CalendarSync.ORA_CENA}:00, con il solo nome del piatto.")
                     Text("Da quale lunedì parte il menu?", fontWeight = FontWeight.SemiBold)
-                    for (d in listOf(lunedi, lunedi.plusWeeks(1))) {
+                    for (d in opzioni) {
                         Choice(d.format(fmt), start == d, Modifier.fillMaxWidth()) { start = d }
                     }
                     Text("Su quale calendario?", fontWeight = FontWeight.SemiBold)
@@ -595,8 +624,9 @@ fun CalendarDialog(ctx: Context, slots: List<Slot>, onClose: () -> Unit, onDone:
                     val c = cal
                     if (c != null) {
                         try {
-                            val n = CalendarSync.send(ctx, c, slots, start)
-                            onDone("Inviati $n pasti a Google Calendar.")
+                            val (n, vecchi) = CalendarSync.send(ctx, c, slots, start, nomi)
+                            onInviato(start)
+                            onDone("Inviati $n pasti a Google Calendar." + (if (vecchi > 0) " Sostituiti $vecchi eventi precedenti." else "") + " Menù salvato per questa settimana.")
                         } catch (e: Exception) {
                             onDone("Non sono riuscito a scrivere sul calendario.")
                         }
@@ -725,6 +755,41 @@ fun UpdateButton(m: Model) {
                 ) { Text(if (busy) "Scarico" else "Scarica") }
             },
             dismissButton = { TextButton(onClick = { dialog = false }, enabled = !busy) { Text("Annulla") } },
+        )
+    }
+}
+
+// ---- Recupero di un menù salvato ----
+fun dataIt(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.ITALY))
+
+@Composable
+fun RecuperaButton(m: Model) {
+    var dialog by remember { mutableStateOf(false) }
+    var settimane by remember { mutableStateOf<List<Settimana>>(emptyList()) }
+    OutlinedButton(
+        onClick = { settimane = m.settimane(); dialog = true },
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+    ) { Text("Recupera un menù salvato") }
+    if (dialog) {
+        AlertDialog(
+            onDismissRequest = { dialog = false },
+            title = { Text("Recupera un menù") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (settimane.isEmpty()) {
+                        Text("Non c’è ancora nessun menù salvato. Si salva quando invii i pasti a Google Calendar: uno per settimana, l’ultimo inviato.")
+                    } else {
+                        Text("Il menù torna com’era quando l’hai inviato. Poi puoi modificarlo e rimandarlo al calendario.")
+                        for (s in settimane) {
+                            Choice(dataIt(s.inizio) + "\n" + s.pasti + " pasti", false, Modifier.fillMaxWidth()) {
+                                if (m.recupera(s.inizio)) dialog = false
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dialog = false }) { Text("Chiudi") } },
         )
     }
 }
