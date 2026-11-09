@@ -14,7 +14,7 @@ object CalendarSync {
     const val ORA_PRANZO = 13      // ora di inizio dell'evento del pranzo
     const val ORA_CENA = 20        // ora di inizio dell'evento della cena
     const val DURATA_MIN = 60      // durata degli eventi, in minuti
-    const val PROMEMORIA_MIN = 30  // notifica prima dell'evento (0 = nessuna notifica)
+    const val PROMEMORIA_MIN = 0   // minuti di preavviso della notifica (0 = nessuna notifica)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE)
 
