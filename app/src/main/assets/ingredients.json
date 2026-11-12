@@ -10,6 +10,16 @@
   "grassi": 1.5
  },
  {
+  "id": "cozze",
+  "nome": "Cozze",
+  "unita": "g",
+  "prezzo": 7,
+  "reparto": "Pescheria",
+  "carbo": 3,4,
+  "proteine": 12,
+  "grassi": 2.7
+ },
+ {
   "id": "riso",
   "nome": "Riso",
   "unita": "g",
