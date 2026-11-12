@@ -145,14 +145,24 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
     fun titoloAggiornato(titolo: String, prima: Set<String>, dopo: Set<String>): String =
         Titoli.aggiorna(titolo, (prima - dopo).mapNotNull { parola(it) }, (dopo - prima).mapNotNull { parola(it) })
 
-    fun build(days: Int, meals: String, leftover: Boolean): List<Slot> {
+    /**
+     * Crea il menu per i giorni scelti (0 = lunedì ... 6 = domenica).
+     * Gli avanzi passano solo da un giorno a quello subito dopo: se il giorno dopo non è nel menu,
+     * la cena si cucina per una volta sola, e il pranzo di un giorno che segue un giorno saltato è un piatto nuovo.
+     */
+    fun build(giorni: Collection<Int>, meals: String, leftover: Boolean): List<Slot> {
         val lunch = meals != "cena"
         val dinner = meals != "pranzo"
         val lf = leftover && lunch && dinner
+        val scelti = giorni.filter { it in 0..6 }.toSortedSet()
         val specs = ArrayList<Spec>()
-        for (d in 0 until days) {
-            if (lunch) specs.add(Spec(d, "Pranzo", 1, if (lf && d > 0) specs.size - 1 else null))
-            if (dinner) specs.add(Spec(d, "Cena", if (lf && d < days - 1) 2 else 1, null))
+        val cenaDel = HashMap<Int, Int>() // giorno -> posizione della sua cena in specs
+        for (d in scelti) {
+            if (lunch) specs.add(Spec(d, "Pranzo", 1, if (lf) cenaDel[d - 1] else null))
+            if (dinner) {
+                cenaDel[d] = specs.size
+                specs.add(Spec(d, "Cena", if (lf && (d + 1) in scelti) 2 else 1, null))
+            }
         }
         val sc = pool.associateWith { pq(it) + (Random.nextDouble() - 0.5) * 0.2 }
         val sh = pool.sortedByDescending { sc.getValue(it) }
@@ -185,8 +195,12 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
         val l = if (c.isNotEmpty()) c else pl.filter { it != s.recipe }
         if (l.isEmpty()) return slots
         val p = l.sortedByDescending { pq(it) }.take(8).random()
-        return slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = p, titolo = null) else x }
+        return choose(slots, idx, p)
     }
+
+    /** Mette la ricetta scelta in quel pasto (e nei pranzi che ne riusano gli avanzi), ripartendo dalla ricetta originale. */
+    fun choose(slots: List<Slot>, idx: Int, r: Recipe): List<Slot> =
+        slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r, titolo = null) else x }
 
     fun shopping(slots: List<Slot>): List<Item> {
         val a = LinkedHashMap<String, Double>()

@@ -46,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +64,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.core.content.ContextCompat
+import java.text.Normalizer
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -179,10 +182,22 @@ fun SetupScreen(m: Model) {
         Text("MealYourWeek", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
         Text("Menu e spesa della settimana", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        Question("Per quanti giorni a settimana?")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (d in 1..7) Choice(d.toString(), m.days == d, Modifier.weight(1f), true) { m.days = d }
+        Question("Quali giorni vuoi pianificare?", "Tocca un giorno per toglierlo o rimetterlo.")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (d in 0..6) {
+                Choice(GIORNI[d].take(3), d in m.giorniScelti, Modifier.weight(1f), true) { m.toggleGiorno(d) }
+            }
         }
+        Text(
+            when (m.giorniScelti.size) {
+                0 -> "Scegli almeno un giorno."
+                1 -> "1 giorno"
+                else -> "${m.giorniScelti.size} giorni"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (m.giorniScelti.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
 
         Question("Quali pasti vuoi pianificare?")
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -204,6 +219,7 @@ fun SetupScreen(m: Model) {
 
         Button(
             onClick = { m.generate() },
+            enabled = m.giorniScelti.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().padding(top = 28.dp),
             contentPadding = PaddingValues(vertical = 14.dp),
         ) { Text("Crea il menu") }
@@ -242,7 +258,8 @@ fun ResultScreen(m: Model) {
 @Composable
 fun MenuTab(m: Model, slots: List<Slot>) {
     val cat = m.catalog
-    val nDays = (slots.maxOfOrNull { it.day } ?: -1) + 1
+    // solo i giorni che sono nel menu, in ordine (0 = lunedì)
+    val giorni = slots.map { it.day }.distinct().sorted()
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -258,7 +275,7 @@ fun MenuTab(m: Model, slots: List<Slot>) {
                 )
             }
         }
-        for (d in 0 until nDays) {
+        for (d in giorni) {
             item(key = "h$d") {
                 Column(Modifier.padding(top = 10.dp)) {
                     Text(GIORNI[d % 7], style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
@@ -285,6 +302,7 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
     val cs = MaterialTheme.colorScheme
     var open by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var choosing by remember { mutableStateOf(false) }
     val lf = s.from != null
     AppCard {
         val label = s.meal + (if (lf) ", avanzi di ieri sera" else if (s.mult > 1) ", quantità per cena e pranzo di domani" else "")
@@ -304,9 +322,10 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
                 TextButton(onClick = { open = !open }) { Text(if (open) "Nascondi" else "Ingredienti") }
                 TextButton(onClick = { editing = true }) { Text("Modifica") }
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = { m.swap(idx) }) { Text("Cambia") }
+                TextButton(onClick = { choosing = true }) { Text("Cambia") }
             }
             if (editing) EditDialog(m, s, idx) { editing = false }
+            if (choosing) RecipeDialog(m, s, idx) { choosing = false }
             if (open) {
                 for ((k, q) in s.recipe.ing) {
                     val i = cat.ing.getValue(k)
@@ -365,7 +384,8 @@ fun ShopTab(m: Model, lista: List<Item>) {
 fun NutriTab(m: Model, slots: List<Slot>, lista: List<Item>) {
     val cat = m.catalog
     val cs = MaterialTheme.colorScheme
-    val nDays = (slots.maxOfOrNull { it.day } ?: -1) + 1
+    val giorni = slots.map { it.day }.distinct()
+    val nDays = giorni.size.coerceAtLeast(1)
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -373,10 +393,10 @@ fun NutriTab(m: Model, slots: List<Slot>, lista: List<Item>) {
         AppCard {
             Text("Spesa stimata", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Text(euro(lista.sumOf { it.costo }), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-            Text("Prezzi medi indicativi, per 2 persone e $nDays giorni.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("Prezzi medi indicativi, per 2 persone e " + (if (nDays == 1) "1 giorno." else "$nDays giorni."), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         for (p in PERSONE) {
-            val avg = (0 until nDays).fold(Macros(0.0, 0.0, 0.0)) { a, d -> a + cat.dayMacros(slots, d, p) } * (1.0 / nDays)
+            val avg = giorni.fold(Macros(0.0, 0.0, 0.0)) { a, d -> a + cat.dayMacros(slots, d, p) } * (1.0 / nDays)
             val en = (avg.c + avg.p) * 4 + avg.f * 9
             AppCard {
                 Text(p.nome, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
@@ -514,6 +534,91 @@ fun PickDialog(cat: Catalog, exclude: Set<String>, onPick: (String) -> Unit, onC
                         }
                         items(l, key = { x -> x.id }) { x ->
                             Text(x.nome, Modifier.fillMaxWidth().clickable { onPick(x.id) }.padding(vertical = 12.dp))
+                        }
+                    }
+                }
+                TextButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Annulla") }
+            }
+        }
+    }
+}
+
+// ---- Scelta di un'altra ricetta per un pasto ----
+/** Testo senza accenti e in minuscolo, per la ricerca: "pure" trova anche "Purè". */
+fun perRicerca(s: String): String =
+    Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.ITALY)
+
+/**
+ * Le ricette che contengono tutte le parole cercate, in qualsiasi ordine ("pollo zucchine" trova
+ * "Pollo con zucchine"), ordinate per nome. Quella attuale non c'è.
+ */
+fun cercaRicette(ricette: List<Recipe>, cerca: String, attuale: String): List<Recipe> {
+    val parole = perRicerca(cerca).split(" ").filter { it.isNotBlank() }
+    return ricette
+        .filter { it.nome != attuale }
+        .filter { r -> val n = perRicerca(r.nome); parole.all { it in n } }
+        .sortedBy { perRicerca(it.nome) }
+}
+
+@Composable
+fun RecipeDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var q by remember { mutableStateOf("") }
+    val nelMenu = remember(m.plan) { m.plan.orEmpty().map { it.recipe.nome }.toSet() }
+    val lista = cercaRicette(m.catalog.pool, q, s.recipe.nome)
+    val focus = remember { FocusRequester() }
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = cs.background) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Scegli il piatto", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    s.meal + " di " + GIORNI[s.day % 7].lowercase(Locale.ITALY) + ", ora: " + (s.titolo ?: s.recipe.nome),
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = q, onValueChange = { q = it }, label = { Text("Cerca per nome") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focus),
+                )
+                // il campo di ricerca è già attivo: basta iniziare a scrivere
+                LaunchedEffect(Unit) {
+                    try {
+                        focus.requestFocus()
+                    } catch (e: Exception) {
+                        // se non riesce, basta toccare il campo
+                    }
+                }
+                OutlinedButton(
+                    onClick = { m.swap(idx); onClose() },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) { Text("Scegline uno a caso") }
+                if (s.mult > 1) {
+                    Text(
+                        "Questa cena vale anche per il pranzo di domani: meglio un piatto buono anche il giorno dopo.",
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                LazyColumn(Modifier.weight(1f).padding(top = 4.dp)) {
+                    if (lista.isEmpty()) {
+                        item(key = "vuoto") {
+                            Text(
+                                "Nessuna ricetta contiene “${q.trim()}”.",
+                                color = cs.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                        }
+                    }
+                    items(lista, key = { r -> r.nome }) { r ->
+                        Column(
+                            Modifier.fillMaxWidth().clickable { m.choose(idx, r); onClose() }.padding(vertical = 10.dp),
+                        ) {
+                            Text(r.nome)
+                            val note = listOfNotNull(
+                                if (r.giornoDopo) "Buona anche il giorno dopo" else null,
+                                if (r.nome in nelMenu) "Già nel menu" else null,
+                            )
+                            if (note.isNotEmpty()) {
+                                Text(note.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                            }
                         }
                     }
                 }

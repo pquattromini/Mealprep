@@ -14,7 +14,8 @@ class Model(ctx: Context) {
     var catalog by mutableStateOf(Catalog.load(ctx))
     private val prefs = ctx.getSharedPreferences("tavola", Context.MODE_PRIVATE)
 
-    var days by mutableIntStateOf(prefs.getInt("days", 7))
+    /** I giorni della settimana da pianificare: 0 = lunedì ... 6 = domenica. */
+    var giorniScelti by mutableStateOf(leggiGiorni())
     var meals by mutableStateOf(prefs.getString("meals", "both") ?: "both")
     var leftover by mutableStateOf(prefs.getBoolean("leftover", true))
     var plan by mutableStateOf(loadPlan())
@@ -38,8 +39,25 @@ class Model(ctx: Context) {
         }
     }
 
+    /**
+     * Legge i giorni salvati. Le versioni precedenti salvavano solo quanti giorni ("days"),
+     * sempre a partire da lunedì: in quel caso si prendono i primi giorni della settimana.
+     */
+    private fun leggiGiorni(): Set<Int> {
+        val salvati = prefs.getString("giorni", null)
+            ?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.filter { it in 0..6 }?.toSet()
+        if (salvati != null) return salvati
+        return (0 until prefs.getInt("days", 7).coerceIn(1, 7)).toSet()
+    }
+
+    /** Toglie o rimette un giorno della settimana. */
+    fun toggleGiorno(d: Int) {
+        giorniScelti = if (d in giorniScelti) giorniScelti - d else giorniScelti + d
+    }
+
     fun generate() {
-        plan = catalog.build(days, meals, leftover)
+        if (giorniScelti.isEmpty()) return
+        plan = catalog.build(giorniScelti, meals, leftover)
         inizioMenu = null
         checked = emptySet()
         tab = 0
@@ -50,6 +68,13 @@ class Model(ctx: Context) {
     fun swap(i: Int) {
         val p = plan ?: return
         plan = catalog.swap(p, i)
+        save()
+    }
+
+    /** Mette in quel pasto la ricetta scelta dall'elenco. */
+    fun choose(i: Int, r: Recipe) {
+        val p = plan ?: return
+        plan = catalog.choose(p, i, r)
         save()
     }
 
@@ -78,7 +103,7 @@ class Model(ctx: Context) {
         val arc = leggiArchivio()
         arc.put(
             inizio.toString(),
-            JSONObject().put("p", encode(p)).put("d", days).put("m", meals).put("l", leftover),
+            JSONObject().put("p", encode(p)).put("m", meals).put("l", leftover),
         )
         // si tengono al massimo le ultime 12 settimane
         val chiavi = arc.keys().asSequence().toList().sorted()
@@ -107,7 +132,9 @@ class Model(ctx: Context) {
     fun recupera(inizio: LocalDate): Boolean {
         val o = try { leggiArchivio().getJSONObject(inizio.toString()) } catch (e: Exception) { return false }
         val p = decode(o.getString("p")) ?: return false
-        days = o.optInt("d", days)
+        if (p.isEmpty()) return false
+        // i giorni si ricavano dal menù stesso: vale anche per i menù salvati con le versioni precedenti
+        giorniScelti = p.map { it.day }.toSet()
         meals = o.optString("m", meals)
         leftover = o.optBoolean("l", leftover)
         plan = p
@@ -122,7 +149,7 @@ class Model(ctx: Context) {
     fun save() {
         val p = plan
         prefs.edit()
-            .putInt("days", days)
+            .putString("giorni", giorniScelti.sorted().joinToString(","))
             .putString("meals", meals)
             .putBoolean("leftover", leftover)
             .putString("plan", if (p == null) null else encode(p))
