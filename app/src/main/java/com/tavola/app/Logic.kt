@@ -202,6 +202,32 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
     fun choose(slots: List<Slot>, idx: Int, r: Recipe): List<Slot> =
         slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r, titolo = null) else x }
 
+    /**
+     * Toglie un pasto dal menu.
+     * - Se è una cena che lasciava gli avanzi per il pranzo dopo, quel pranzo resta, con lo stesso piatto, da cucinare a pranzo.
+     * - Se è un pranzo con gli avanzi, la cena da cui venivano si cucina per una volta sola.
+     * Togliendo un pasto i successivi scalano di una posizione, quindi i riferimenti agli avanzi (from) si aggiornano.
+     */
+    fun remove(slots: List<Slot>, idx: Int): List<Slot> {
+        if (idx !in slots.indices) return slots
+        val tolto = slots[idx]
+        val out = ArrayList<Slot>()
+        for ((i, s) in slots.withIndex()) {
+            if (i == idx) continue
+            val f = s.from
+            out.add(
+                when {
+                    i == tolto.from -> s.copy(mult = 1)          // la cena che lasciava gli avanzi al pranzo tolto
+                    f == null -> s
+                    f == idx -> s.copy(from = null, mult = 1)    // gli avanzi venivano dalla cena tolta
+                    f > idx -> s.copy(from = f - 1)
+                    else -> s
+                }
+            )
+        }
+        return out
+    }
+
     fun shopping(slots: List<Slot>): List<Item> {
         val a = LinkedHashMap<String, Double>()
         for (s in slots) {

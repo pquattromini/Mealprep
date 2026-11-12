@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -289,7 +290,8 @@ fun MenuTab(m: Model, slots: List<Slot>) {
                 }
             }
             slots.forEachIndexed { i, s ->
-                if (s.day == d) item(key = "s$i") { MealCard(m, s, i) }
+                // la chiave è giorno + pasto, non la posizione: togliendo un pasto le schede restano al loro posto
+                if (s.day == d) item(key = "s${s.day}${s.meal}") { MealCard(m, s, i) }
             }
         }
         item(key = "calendario") { CalendarButton(m, slots) }
@@ -303,10 +305,23 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
     var open by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var choosing by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     val lf = s.from != null
     AppCard {
         val label = s.meal + (if (lf) ", avanzi di ieri sera" else if (s.mult > 1) ", quantità per cena e pranzo di domani" else "")
-        Text(label, style = MaterialTheme.typography.labelMedium, color = cs.primary, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                label, style = MaterialTheme.typography.labelMedium, color = cs.primary, fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = { deleting = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(32.dp),
+            ) { Text("Elimina") }
+        }
+        if (deleting) DeleteDialog(m, s, idx) { deleting = false }
         Text(s.titolo ?: s.recipe.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (s.recipe.giornoDopo) {
             Text("Buona anche il giorno dopo", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
@@ -339,6 +354,36 @@ fun MealCard(m: Model, s: Slot, idx: Int) {
             }
         }
     }
+}
+
+/** Chiede conferma prima di togliere un pasto, spiegando cosa succede agli avanzi. */
+@Composable
+fun DeleteDialog(m: Model, s: Slot, idx: Int, onClose: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val giorno = GIORNI[s.day % 7].lowercase(Locale.ITALY)
+    val conseguenza = when {
+        s.from != null -> "La cena di ieri sera si cucinerà per una volta sola."
+        s.mult > 1 -> "Il pranzo di domani resta, con lo stesso piatto da cucinare a pranzo."
+        else -> null
+    }
+    val ultimo = m.plan.orEmpty().size <= 1
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Eliminare questo pasto?") },
+        text = {
+            Text(
+                listOfNotNull(
+                    s.meal + " di " + giorno + ": " + (s.titolo ?: s.recipe.nome) + ".",
+                    conseguenza,
+                    if (ultimo) "È l'ultimo pasto del menu: tornerai alla schermata iniziale." else null,
+                ).joinToString("\n\n")
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onClose(); m.remove(idx) }) { Text("Elimina", color = cs.error) }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Annulla") } },
+    )
 }
 
 @Composable

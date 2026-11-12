@@ -78,6 +78,14 @@ class Model(ctx: Context) {
         save()
     }
 
+    /** Toglie un pasto dal menu. Se era l'ultimo rimasto, si torna alla schermata iniziale. */
+    fun remove(i: Int) {
+        val p = plan ?: return
+        val nuovo = catalog.remove(p, i)
+        plan = nuovo.ifEmpty { null }
+        save()
+    }
+
     fun toggle(id: String) {
         checked = if (id in checked) checked - id else checked + id
         save()
