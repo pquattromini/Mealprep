@@ -8,6 +8,9 @@ import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** Stato dell'app. Menu, impostazioni e spunte della spesa restano salvati sul telefono. */
 class Model(ctx: Context) {
@@ -22,6 +25,8 @@ class Model(ctx: Context) {
     var checked by mutableStateOf<Set<String>>(prefs.getStringSet("checked", emptySet())?.toSet() ?: emptySet())
     var editing by mutableStateOf(plan == null)
     var tab by mutableIntStateOf(0)
+    /** Il nome con cui il menù mostrato è salvato nel telefono (se viene da lì o è stato salvato): si propone per risalvarlo. */
+    var nomeMenu by mutableStateOf(prefs.getString("nomeMenu", null))
     /** Il lunedì della settimana a cui appartiene il menù mostrato (c'è dopo l'invio al calendario o dopo un recupero). */
     var inizioMenu by mutableStateOf<LocalDate?>(
         prefs.getString("inizio", null)?.let {
@@ -59,6 +64,7 @@ class Model(ctx: Context) {
         if (giorniScelti.isEmpty()) return
         plan = catalog.build(giorniScelti, meals, leftover)
         inizioMenu = null
+        nomeMenu = null
         checked = emptySet()
         tab = 0
         editing = false
@@ -102,56 +108,130 @@ class Model(ctx: Context) {
 
     fun isModified(s: Slot): Boolean = catalog.byName[s.recipe.nome]?.ing != s.recipe.ing
 
-    private fun leggiArchivio(): JSONObject =
-        try { JSONObject(prefs.getString("archivio", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
-
-    /** Salva il menù mostrato come menù di quella settimana: ne resta uno solo per settimana, l'ultimo inviato. */
-    fun archivia(inizio: LocalDate) {
-        val p = plan ?: return
-        val arc = leggiArchivio()
-        arc.put(
-            inizio.toString(),
-            JSONObject().put("p", encode(p)).put("m", meals).put("l", leftover),
-        )
-        // si tengono al massimo le ultime 12 settimane
-        val chiavi = arc.keys().asSequence().toList().sorted()
-        for (k in chiavi.dropLast(12)) arc.remove(k)
-        prefs.edit().putString("archivio", arc.toString()).apply()
+    /** Dopo l'invio al calendario: il menù mostrato è quello della settimana che parte da quel lunedì. */
+    fun inviato(inizio: LocalDate) {
         inizioMenu = inizio
         save()
     }
 
-    /** Le settimane con un menù salvato, dalla più recente. */
-    fun settimane(): List<Settimana> {
-        val arc = leggiArchivio()
-        val out = ArrayList<Settimana>()
-        for (k in arc.keys().asSequence().toList()) {
+    // ---- Menù salvati nel telefono ----
+    // Si salvano solo quando lo chiedi tu (tasto "Salva nel telefono"), con un nome. Sono in "salvati":
+    // un oggetto JSON con, per ogni menù, n = nome, w = quando è stato salvato, p = il menù, m e l = impostazioni dei pasti,
+    // s = il lunedì della settimana (se il menù ne aveva una), v = true per quelli venuti dal vecchio archivio.
+
+    private fun leggiSalvati(): JSONObject {
+        val tutti = try { JSONObject(prefs.getString("salvati", "{}") ?: "{}") } catch (e: Exception) { JSONObject() }
+        // Le versioni precedenti salvavano da sole un menù per settimana all'invio al calendario ("archivio"):
+        // la prima volta diventano menù salvati nel telefono, con il nome della settimana.
+        val vecchio = prefs.getString("archivio", null)
+        if (vecchio != null) {
             try {
-                val n = decode(arc.getJSONObject(k).getString("p"))?.size ?: 0
-                if (n > 0) out.add(Settimana(LocalDate.parse(k), n))
+                val arc = JSONObject(vecchio)
+                for (k in arc.keys().asSequence().toList()) {
+                    val a = arc.getJSONObject(k)
+                    val lunedi = LocalDate.parse(k)
+                    tutti.put(
+                        "archivio-$k",
+                        JSONObject()
+                            .put("n", "Settimana dal " + lunedi.format(GIORNO_MESE))
+                            .put("w", lunedi.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
+                            .put("p", a.getString("p"))
+                            .put("m", a.optString("m", "both"))
+                            .put("l", a.optBoolean("l", true))
+                            .put("s", k)
+                            .put("v", true),
+                    )
+                }
             } catch (e: Exception) {
-                // voce non leggibile: la salto
+                // archivio non leggibile: non c'è niente da recuperare
             }
+            prefs.edit().putString("salvati", tutti.toString()).remove("archivio").apply()
         }
-        return out.sortedByDescending { it.inizio.toEpochDay() }
+        return tutti
     }
 
-    /** Ricarica il menù salvato per quella settimana, con le modifiche e i titoli com'erano al momento dell'invio. */
-    fun recupera(inizio: LocalDate): Boolean {
-        val o = try { leggiArchivio().getJSONObject(inizio.toString()) } catch (e: Exception) { return false }
-        val p = decode(o.getString("p")) ?: return false
+    /** I menù salvati nel telefono, dal più recente. */
+    fun salvati(): List<MenuSalvato> {
+        val tutti = leggiSalvati()
+        val out = ArrayList<MenuSalvato>()
+        for (k in tutti.keys().asSequence().toList()) {
+            val o = tutti.optJSONObject(k) ?: continue
+            // se le ricette sono cambiate e il menù non si può più leggere, resta nell'elenco per poterlo eliminare
+            val p = decode(o.optString("p", ""))
+            out.add(
+                MenuSalvato(
+                    id = k,
+                    nome = o.optString("n", "Menu senza nome"),
+                    quando = o.optLong("w", 0L),
+                    dalVecchioArchivio = o.optBoolean("v", false),
+                    pasti = p?.size ?: 0,
+                    leggibile = !p.isNullOrEmpty(),
+                )
+            )
+        }
+        return out.sortedByDescending { it.quando }
+    }
+
+    /** Salva il menù mostrato con quel nome. Se c'è già un menù con lo stesso nome (maiuscole a parte), lo sostituisce. */
+    fun salvaLocale(nome: String): Boolean {
+        val p = plan ?: return false
+        val n = nome.trim()
+        if (n.isEmpty()) return false
+        val tutti = leggiSalvati()
+        for (k in tutti.keys().asSequence().toList()) {
+            if (tutti.optJSONObject(k)?.optString("n", "").equals(n, ignoreCase = true)) tutti.remove(k)
+        }
+        val adesso = System.currentTimeMillis()
+        val o = JSONObject().put("n", n).put("w", adesso).put("p", encode(p)).put("m", meals).put("l", leftover)
+        val ini = inizioMenu
+        if (ini != null) o.put("s", ini.toString())
+        tutti.put("m$adesso", o)
+        prefs.edit().putString("salvati", tutti.toString()).apply()
+        nomeMenu = n
+        save()
+        return true
+    }
+
+    /** Ricarica un menù salvato nel telefono, con le modifiche e i titoli com'erano quando l'hai salvato. */
+    fun recuperaLocale(id: String): Boolean {
+        val o = leggiSalvati().optJSONObject(id) ?: return false
+        val p = decode(o.optString("p", "")) ?: return false
         if (p.isEmpty()) return false
-        // i giorni si ricavano dal menù stesso: vale anche per i menù salvati con le versioni precedenti
+        val s = o.optString("s", "")
+        val lunedi = if (s.isEmpty()) null else try { LocalDate.parse(s) } catch (e: Exception) { null }
+        applica(p, o.optString("m", meals), o.optBoolean("l", leftover), lunedi, o.optString("n", "").ifEmpty { null })
+        return true
+    }
+
+    fun eliminaLocale(id: String) {
+        val tutti = leggiSalvati()
+        tutti.remove(id)
+        prefs.edit().putString("salvati", tutti.toString()).apply()
+    }
+
+    /** Mostra il menù ricostruito dal calendario per quella settimana. */
+    fun recuperaDaCalendario(mc: MenuCalendario): Boolean {
+        val p = mc.pasti
+        if (p.isEmpty()) return false
+        val pranzi = p.any { it.meal == "Pranzo" }
+        val cene = p.any { it.meal == "Cena" }
+        val pasti = if (pranzi && cene) "both" else if (pranzi) "pranzo" else "cena"
+        applica(p, pasti, if (pranzi && cene) p.any { it.from != null } else leftover, mc.lunedi, null)
+        return true
+    }
+
+    private fun applica(p: List<Slot>, pasti: String, avanzi: Boolean, lunedi: LocalDate?, nome: String?) {
+        // i giorni si ricavano dal menù stesso
         giorniScelti = p.map { it.day }.toSet()
-        meals = o.optString("m", meals)
-        leftover = o.optBoolean("l", leftover)
+        meals = pasti
+        leftover = avanzi
         plan = p
-        inizioMenu = inizio
+        inizioMenu = lunedi
+        nomeMenu = nome
         checked = emptySet()
         tab = 0
         editing = false
         save()
-        return true
     }
 
     fun save() {
@@ -163,6 +243,7 @@ class Model(ctx: Context) {
             .putString("plan", if (p == null) null else encode(p))
             .putStringSet("checked", checked)
             .putString("inizio", inizioMenu?.toString())
+            .putString("nomeMenu", nomeMenu)
             .apply()
     }
 
@@ -205,5 +286,15 @@ class Model(ctx: Context) {
     }
 }
 
-/** Una settimana (con il suo lunedì) per cui c'è un menù salvato. */
-data class Settimana(val inizio: LocalDate, val pasti: Int)
+/** "9 novembre": per i nomi proposti ai menù salvati. */
+val GIORNO_MESE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM", Locale.ITALY)
+
+/** Un menù salvato nel telefono, per l'elenco da cui recuperarlo. */
+data class MenuSalvato(
+    val id: String,
+    val nome: String,
+    val quando: Long,
+    val dalVecchioArchivio: Boolean,
+    val pasti: Int,
+    val leggibile: Boolean,
+)

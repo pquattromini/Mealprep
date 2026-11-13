@@ -4,6 +4,8 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.math.ceil
 import kotlin.random.Random
 
@@ -66,6 +68,27 @@ data class Macros(val c: Double, val p: Double, val f: Double) {
 }
 
 data class Slot(val day: Int, val meal: String, val recipe: Recipe, val mult: Int, val from: Int?, val titolo: String? = null)
+
+/** Aggiunto al nome del piatto negli eventi del calendario per i pranzi con gli avanzi. */
+const val SUFFISSO_AVANZI = " (avanzi)"
+
+/**
+ * Un pasto letto da un evento del calendario. I campi che possono mancare (null) mancano negli eventi
+ * messi dalle versioni precedenti dell'app, che avevano solo il titolo.
+ */
+data class PastoCalendario(
+    val data: LocalDate,
+    val ora: Int,
+    val titolo: String,
+    val ricetta: String? = null,
+    val pasto: String? = null,
+    val avanzi: Boolean? = null,
+    val titoloMio: String? = null,
+    val ingredienti: Map<String, Double>? = null,
+)
+
+/** Il menu di una settimana ricostruito dal calendario, e quanti pasti non corrispondono più a nessuna ricetta. */
+data class MenuCalendario(val lunedi: LocalDate, val pasti: List<Slot>, val nonRiconosciuti: Int)
 
 data class Item(val id: String, val nome: String, val unita: String, val reparto: String, val q: Double, val costo: Double)
 
@@ -201,6 +224,46 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
     /** Mette la ricetta scelta in quel pasto (e nei pranzi che ne riusano gli avanzi), ripartendo dalla ricetta originale. */
     fun choose(slots: List<Slot>, idx: Int, r: Recipe): List<Slot> =
         slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r, titolo = null) else x }
+
+    /**
+     * Ricostruisce il menu della settimana che parte da quel lunedì a partire dagli eventi del calendario, così come sono:
+     * un pasto tolto o spostato nel calendario risulta tolto o spostato anche nel menu.
+     * - Il giorno è la data dell'evento; il pasto è quello scritto nei dati, oppure si ricava dall'ora.
+     * - Un pranzo con gli avanzi si collega alla cena del giorno prima se c'è ed è lo stesso piatto;
+     *   altrimenti diventa un pasto normale (come quando si toglie quella cena dall'app).
+     * - Se due eventi cadono nello stesso pasto dello stesso giorno, si tiene il primo.
+     */
+    fun daCalendario(lunedi: LocalDate, eventi: List<PastoCalendario>): MenuCalendario {
+        var nonRiconosciuti = 0
+        val trovati = LinkedHashMap<Pair<Int, String>, Slot>()
+        val conAvanzi = HashSet<Pair<Int, String>>()
+        for (e in eventi.sortedWith(compareBy({ it.data }, { it.ora }))) {
+            val day = ChronoUnit.DAYS.between(lunedi, e.data).toInt()
+            if (day !in 0..6) continue
+            val meal = e.pasto?.takeIf { it == "Pranzo" || it == "Cena" } ?: if (e.ora < 17) "Pranzo" else "Cena"
+            val chiave = Pair(day, meal)
+            if (chiave in trovati) continue
+            var r = byName[e.ricetta ?: e.titolo.removeSuffix(SUFFISSO_AVANZI)]
+            if (r == null) {
+                nonRiconosciuti++
+                continue
+            }
+            val mod = e.ingredienti
+            if (mod != null && mod.isNotEmpty() && mod.keys.all { it in ing }) r = r.copy(ing = mod)
+            trovati[chiave] = Slot(day, meal, r, 1, null, e.titoloMio)
+            if (e.avanzi ?: e.titolo.endsWith(SUFFISSO_AVANZI)) conAvanzi.add(chiave)
+        }
+        val out = trovati.values.sortedWith(compareBy({ it.day }, { if (it.meal == "Pranzo") 0 else 1 })).toMutableList()
+        for (i in out.indices) {
+            val s = out[i]
+            if (s.meal != "Pranzo" || Pair(s.day, s.meal) !in conAvanzi) continue
+            val j = out.indexOfFirst { it.day == s.day - 1 && it.meal == "Cena" }
+            if (j < 0 || out[j].recipe.nome != s.recipe.nome) continue
+            out[j] = out[j].copy(mult = 2)
+            out[i] = s.copy(recipe = out[j].recipe, titolo = out[j].titolo, from = j)
+        }
+        return MenuCalendario(lunedi, out, nonRiconosciuti)
+    }
 
     /**
      * Toglie un pasto dal menu.

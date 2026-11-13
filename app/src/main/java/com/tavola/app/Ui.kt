@@ -67,7 +67,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.core.content.ContextCompat
 import java.text.Normalizer
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
@@ -294,6 +296,7 @@ fun MenuTab(m: Model, slots: List<Slot>) {
                 if (s.day == d) item(key = "s${s.day}${s.meal}") { MealCard(m, s, i) }
             }
         }
+        item(key = "salva") { SalvaButton(m) }
         item(key = "calendario") { CalendarButton(m, slots) }
     }
 }
@@ -700,8 +703,8 @@ fun CalendarButton(m: Model, slots: List<Slot>) {
     }
     if (dialog) {
         CalendarDialog(
-            ctx, slots, m.catalog.recipes.map { it.nome }, m.inizioMenu,
-            onInviato = { d -> m.archivia(d) },
+            ctx, slots, m.catalog, m.inizioMenu,
+            onInviato = { d -> m.inviato(d) },
             onClose = { dialog = false },
             onDone = { text -> msg = text; dialog = false },
         )
@@ -710,7 +713,7 @@ fun CalendarButton(m: Model, slots: List<Slot>) {
 
 @Composable
 fun CalendarDialog(
-    ctx: Context, slots: List<Slot>, nomi: List<String>, preferito: LocalDate?,
+    ctx: Context, slots: List<Slot>, cat: Catalog, preferito: LocalDate?,
     onInviato: (LocalDate) -> Unit, onClose: () -> Unit, onDone: (String) -> Unit,
 ) {
     val tutti = remember { CalendarSync.calendars(ctx) }
@@ -739,7 +742,10 @@ fun CalendarDialog(
                 if (cals.isEmpty()) {
                     Text("Non trovo nessun calendario su cui scrivere. Controlla che Google Calendar sia installato e sincronizzato con il tuo account.")
                 } else {
-                    Text("Pranzo alle ${CalendarSync.ORA_PRANZO}:00 e cena alle ${CalendarSync.ORA_CENA}:00, con il solo nome del piatto.")
+                    Text(
+                        "Pranzo alle ${CalendarSync.ORA_PRANZO}:00 e cena alle ${CalendarSync.ORA_CENA}:00, con il nome del piatto. " +
+                            "Nella descrizione di ogni evento c'è una riga che serve all'app per recuperare il menu dal calendario."
+                    )
                     Text("Da quale lunedì parte il menu?", fontWeight = FontWeight.SemiBold)
                     for (d in opzioni) {
                         Choice(d.format(fmt), start == d, Modifier.fillMaxWidth()) { start = d }
@@ -774,9 +780,9 @@ fun CalendarDialog(
                     val c = cal
                     if (c != null) {
                         try {
-                            val (n, vecchi) = CalendarSync.send(ctx, c, slots, start, nomi)
+                            val (n, vecchi) = CalendarSync.send(ctx, c, slots, start, cat)
                             onInviato(start)
-                            onDone("Inviati $n pasti a Google Calendar." + (if (vecchi > 0) " Sostituiti $vecchi eventi precedenti." else "") + " Menù salvato per questa settimana.")
+                            onDone("Inviati $n pasti a Google Calendar." + (if (vecchi > 0) " Sostituiti $vecchi eventi precedenti." else ""))
                         } catch (e: Exception) {
                             onDone("Non sono riuscito a scrivere sul calendario.")
                         }
@@ -912,34 +918,209 @@ fun UpdateButton(m: Model) {
 // ---- Recupero di un menù salvato ----
 fun dataIt(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.ITALY))
 
+/** Il nome proposto quando salvi il menu: quello con cui l'hai già salvato, oppure la sua settimana, oppure la data di oggi. */
+fun nomeProposto(m: Model): String =
+    m.nomeMenu
+        ?: m.inizioMenu?.let { "Settimana dal " + it.format(GIORNO_MESE) }
+        ?: ("Menu del " + LocalDate.now().format(GIORNO_MESE))
+
+// ---- Salvataggio del menu nel telefono ----
+@Composable
+fun SalvaButton(m: Model) {
+    var dialog by remember { mutableStateOf(false) }
+    var nome by remember { mutableStateOf("") }
+    var nomiSalvati by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        OutlinedButton(
+            onClick = {
+                nome = nomeProposto(m)
+                nomiSalvati = m.salvati().map { it.nome.lowercase(Locale.ITALY) }.toSet()
+                msg = null
+                dialog = true
+            },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 14.dp),
+        ) { Text("Salva nel telefono") }
+        val t = msg
+        if (t != null) {
+            Text(t, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+    if (dialog) {
+        val esiste = nome.trim().lowercase(Locale.ITALY) in nomiSalvati
+        AlertDialog(
+            onDismissRequest = { dialog = false },
+            title = { Text("Salva il menu nel telefono") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Lo ritrovi con «Recupera un menù salvato», nella schermata iniziale.")
+                    OutlinedTextField(
+                        value = nome, onValueChange = { nome = it }, label = { Text("Nome") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (esiste) {
+                        Text(
+                            "C'è già un menu salvato con questo nome: verrà sostituito.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (m.salvaLocale(nome)) {
+                            msg = "Menu salvato nel telefono come «" + nome.trim() + "»."
+                            dialog = false
+                        }
+                    },
+                    enabled = nome.isNotBlank(),
+                ) { Text("Salva") }
+            },
+            dismissButton = { TextButton(onClick = { dialog = false }) { Text("Annulla") } },
+        )
+    }
+}
+
+// ---- Recupero di un menu: dal telefono o da Google Calendar ----
+private enum class FaseRecupero { SCELTA, TELEFONO, CALENDARIO }
+
 @Composable
 fun RecuperaButton(m: Model) {
-    var dialog by remember { mutableStateOf(false) }
-    var settimane by remember { mutableStateOf<List<Settimana>>(emptyList()) }
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    var fase by remember { mutableStateOf<FaseRecupero?>(null) }
+    var locali by remember { mutableStateOf<List<MenuSalvato>>(emptyList()) }
+    var settimane by remember { mutableStateOf<List<MenuCalendario>>(emptyList()) }
+    var errore by remember { mutableStateOf<String?>(null) }
+    var daEliminare by remember { mutableStateOf<MenuSalvato?>(null) }
+
+    fun apriCalendario() {
+        errore = null
+        settimane = try {
+            CalendarSync.leggiMenu(ctx, m.catalog)
+        } catch (e: Exception) {
+            errore = "Non sono riuscito a leggere il calendario."
+            emptyList()
+        }
+        fase = FaseRecupero.CALENDARIO
+    }
+    val permesso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) {
+            apriCalendario()
+        } else {
+            errore = "Senza il permesso per il calendario non posso leggere i menu."
+            settimane = emptyList()
+            fase = FaseRecupero.CALENDARIO
+        }
+    }
+
     OutlinedButton(
-        onClick = { settimane = m.settimane(); dialog = true },
+        onClick = { fase = FaseRecupero.SCELTA },
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         contentPadding = PaddingValues(vertical = 14.dp),
     ) { Text("Recupera un menù salvato") }
-    if (dialog) {
-        AlertDialog(
-            onDismissRequest = { dialog = false },
-            title = { Text("Recupera un menù") },
+
+    when (fase) {
+        FaseRecupero.SCELTA -> AlertDialog(
+            onDismissRequest = { fase = null },
+            title = { Text("Recupera un menù salvato") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Da dove vuoi recuperarlo?")
+                    Choice("Dal telefono\nI menu che hai salvato con «Salva nel telefono»", false, Modifier.fillMaxWidth()) {
+                        locali = m.salvati()
+                        fase = FaseRecupero.TELEFONO
+                    }
+                    Choice("Da Google Calendar\nLe settimane che hai inviato al calendario", false, Modifier.fillMaxWidth()) {
+                        val ok = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+                        if (ok) apriCalendario() else permesso.launch(Manifest.permission.READ_CALENDAR)
+                    }
+                    if (m.plan != null) {
+                        Text(
+                            "Il menu che hai adesso verrà sostituito: se vuoi tenerlo, salvalo prima.",
+                            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { fase = null }) { Text("Annulla") } },
+        )
+
+        FaseRecupero.TELEFONO -> AlertDialog(
+            onDismissRequest = { fase = null },
+            title = { Text("Menu salvati nel telefono") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (settimane.isEmpty()) {
-                        Text("Non c’è ancora nessun menù salvato. Si salva quando invii i pasti a Google Calendar: uno per settimana, l’ultimo inviato.")
+                    if (locali.isEmpty()) {
+                        Text("Non hai ancora salvato nessun menu. Crea un menu e tocca «Salva nel telefono», in fondo alla pagina del menu.")
+                    }
+                    for (s in locali) {
+                        val dettagli = when {
+                            !s.leggibile -> "Non più leggibile: le ricette sono cambiate"
+                            s.dalVecchioArchivio -> "${s.pasti} pasti"
+                            else -> "${s.pasti} pasti · salvato il " +
+                                Instant.ofEpochMilli(s.quando).atZone(ZoneId.systemDefault()).toLocalDate().format(GIORNO_MESE)
+                        }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Choice(s.nome + "\n" + dettagli, false, Modifier.weight(1f)) {
+                                if (m.recuperaLocale(s.id)) fase = null
+                            }
+                            TextButton(
+                                onClick = { daEliminare = s },
+                                colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                            ) { Text("Elimina") }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { fase = null }) { Text("Chiudi") } },
+            dismissButton = { TextButton(onClick = { fase = FaseRecupero.SCELTA }) { Text("Indietro") } },
+        )
+
+        FaseRecupero.CALENDARIO -> AlertDialog(
+            onDismissRequest = { fase = null },
+            title = { Text("Menu in Google Calendar") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val e = errore
+                    if (e != null) {
+                        Text(e)
+                    } else if (settimane.isEmpty()) {
+                        Text("Nel calendario non trovo menu inviati con l'app negli ultimi 6 mesi o nelle prossime settimane.")
                     } else {
-                        Text("Il menù torna com’era quando l’hai inviato. Poi puoi modificarlo e rimandarlo al calendario.")
-                        for (s in settimane) {
-                            Choice(dataIt(s.inizio) + "\n" + s.pasti + " pasti", false, Modifier.fillMaxWidth()) {
-                                if (m.recupera(s.inizio)) dialog = false
+                        Text("Il menu torna com'è adesso nel calendario: se lì hai tolto o spostato un pasto, lo ritrovi così.")
+                        for (w in settimane) {
+                            val extra = if (w.nonRiconosciuti > 0) "\n${w.nonRiconosciuti} pasti non riconosciuti, saltati" else ""
+                            Choice("Dal " + dataIt(w.lunedi) + "\n" + w.pasti.size + " pasti" + extra, false, Modifier.fillMaxWidth()) {
+                                if (m.recuperaDaCalendario(w)) fase = null
                             }
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { dialog = false }) { Text("Chiudi") } },
+            confirmButton = { TextButton(onClick = { fase = null }) { Text("Chiudi") } },
+            dismissButton = { TextButton(onClick = { fase = FaseRecupero.SCELTA }) { Text("Indietro") } },
+        )
+
+        null -> {}
+    }
+
+    val s = daEliminare
+    if (s != null) {
+        AlertDialog(
+            onDismissRequest = { daEliminare = null },
+            title = { Text("Eliminare «${s.nome}»?") },
+            text = { Text("Il menu salvato nel telefono verrà cancellato. Il menu che hai adesso e il calendario non cambiano.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    m.eliminaLocale(s.id)
+                    locali = m.salvati()
+                    daEliminare = null
+                }) { Text("Elimina", color = cs.error) }
+            },
+            dismissButton = { TextButton(onClick = { daEliminare = null }) { Text("Annulla") } },
         )
     }
 }
