@@ -4,8 +4,11 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONException
 import java.io.File
+import java.text.Normalizer
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.random.Random
 
@@ -72,6 +75,39 @@ data class Slot(val day: Int, val meal: String, val recipe: Recipe, val mult: In
 /** Aggiunto al nome del piatto negli eventi del calendario per i pranzi con gli avanzi. */
 const val SUFFISSO_AVANZI = " (avanzi)"
 
+/** Testo senza accenti e in minuscolo, per cercare e confrontare: "pure" trova anche "Purè". */
+fun perRicerca(s: String): String =
+    Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.ITALY)
+
+/** Parole che non dicono niente del piatto, ignorate quando si confrontano i titoli. */
+private val PAROLE_VUOTE = setOf(
+    "con", "alla", "alle", "allo", "agli", "dei", "del", "della", "delle", "degli", "dello", "nel", "nella", "sul", "sulla",
+    "per", "senza", "pranzo", "cena", "avanzi",
+)
+
+/**
+ * Le parole che contano di un titolo, senza accenti e senza la vocale finale,
+ * così singolare e plurale coincidono ("zucchina" e "zucchine" -> "zucchin").
+ */
+fun paroleChiave(t: String): Set<String> =
+    Regex("\\p{L}+").findAll(perRicerca(t)).map { it.value }
+        .filter { it.length > 2 && it !in PAROLE_VUOTE }
+        .map { if (it.length > 3 && it.last() in "aeiou") it.dropLast(1) else it }
+        .toSet()
+
+/**
+ * Piatti già noti per titolo, presi dai menu salvati nel telefono: servono per riconoscere nel calendario gli eventi
+ * delle versioni precedenti, che hanno solo il titolo. Chiave = titolo in minuscolo; valore = ricetta (con gli
+ * ingredienti com'erano) e titolo cambiato (null se era il nome della ricetta).
+ */
+class PiattiNoti(
+    val stessaSettimana: Map<String, Pair<Recipe, String?>> = emptyMap(),
+    val altri: Map<String, Pair<Recipe, String?>> = emptyMap(),
+)
+
+/** Il piatto riconosciuto da un titolo. esatto = false se è solo la ricetta col nome più simile (ingredienti originali). */
+data class Riconosciuto(val ricetta: Recipe, val titolo: String?, val esatto: Boolean)
+
 /**
  * Un pasto letto da un evento del calendario. I campi che possono mancare (null) mancano negli eventi
  * messi dalle versioni precedenti dell'app, che avevano solo il titolo.
@@ -85,10 +121,15 @@ data class PastoCalendario(
     val avanzi: Boolean? = null,
     val titoloMio: String? = null,
     val ingredienti: Map<String, Double>? = null,
+    /** true se l'evento è sicuramente dell'app (ha i dati del pasto o l'app ne ricorda l'id). */
+    val sicuro: Boolean = false,
 )
 
-/** Il menu di una settimana ricostruito dal calendario, e quanti pasti non corrispondono più a nessuna ricetta. */
-data class MenuCalendario(val lunedi: LocalDate, val pasti: List<Slot>, val nonRiconosciuti: Int)
+/**
+ * Il menu di una settimana ricostruito dal calendario; nonRiconosciuti = eventi dell'app che non corrispondono a nessuna
+ * ricetta; approssimati = pasti riconosciuti solo dalla ricetta col nome più simile, con gli ingredienti originali.
+ */
+data class MenuCalendario(val lunedi: LocalDate, val pasti: List<Slot>, val nonRiconosciuti: Int, val approssimati: Int = 0)
 
 data class Item(val id: String, val nome: String, val unita: String, val reparto: String, val q: Double, val costo: Double)
 
@@ -225,35 +266,140 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
     fun choose(slots: List<Slot>, idx: Int, r: Recipe): List<Slot> =
         slots.mapIndexed { i, x -> if (i == idx || x.from == idx) x.copy(recipe = r, titolo = null) else x }
 
+    // ---- Riconoscere un piatto dal titolo di un evento del calendario ----
+
+    private val regexParola = HashMap<String, Regex>()
+
+    /** true se il titolo contiene la parola (o le parole) p intera, maiuscole a parte: come fa Titoli. */
+    private fun contiene(t: String, p: String): Boolean =
+        regexParola.getOrPut(p) { Regex("(?<![\\p{L}])" + Regex.escape(p) + "(?![\\p{L}])", RegexOption.IGNORE_CASE) }.containsMatchIn(t)
+
+    /** Parola per i titoli -> ingredienti che la usano. */
+    private val idPerParola: Map<String, List<String>> by lazy {
+        ing.keys.mapNotNull { id -> parola(id)?.let { it to id } }.groupBy({ it.first }, { it.second })
+    }
+
+    private val paroleRicette: Map<String, Set<String>> by lazy { recipes.associate { it.nome to paroleChiave(it.nome) } }
+
+    private fun <T> permutazioni(l: List<T>): List<List<T>> =
+        if (l.size <= 1) listOf(l) else l.indices.flatMap { i -> permutazioni(l.take(i) + l.drop(i + 1)).map { listOf(l[i]) + it } }
+
+    /**
+     * Prova a spiegare il titolo come il nome della ricetta r dopo averne sostituito, tolto o aggiunto degli ingredienti
+     * con "Modifica" (per esempio "Pollo con peperoni" -> "Pollo con zucchine"). Rifà le stesse operazioni, aggiornando il
+     * titolo passo per passo come fa l'app: se si arriva proprio a quel titolo, restituisce gli ingredienti modificati.
+     * Le quantità cambiate con "Più" e "Meno" non lasciano traccia nel titolo, quindi non si possono ricostruire.
+     */
+    fun ricostruisci(r: Recipe, titolo: String): Map<String, Double>? {
+        val t = titolo.trim()
+        if (t.equals(r.nome, ignoreCase = true)) return null
+        val tolti = r.ing.keys.filter { id -> val p = parola(id); p != null && contiene(r.nome, p) && !contiene(t, p) }
+        val aggiunti = idPerParola
+            .filter { (p, ids) -> contiene(t, p) && !contiene(r.nome, p) && ids.none { it in r.ing } }
+            .map { (p, ids) -> ids.firstOrNull { it == p } ?: ids.first() }
+        if (tolti.isEmpty() && aggiunti.isEmpty()) return null
+        if (tolti.size > 3 || aggiunti.size > 3) return null
+        for (ordine in permutazioni(aggiunti)) {
+            var cur = r.ing
+            var tit = r.nome
+            for ((i, a) in tolti.withIndex()) {
+                val b = ordine.getOrNull(i)
+                val nuovo = if (b != null) replaceIng(cur, a, b) else cur - a
+                tit = titoloAggiornato(tit, cur.keys, nuovo.keys)
+                cur = nuovo
+            }
+            for (b in ordine.drop(tolti.size)) {
+                val nuovo = addIng(cur, b)
+                tit = titoloAggiornato(tit, cur.keys, nuovo.keys)
+                cur = nuovo
+            }
+            if (tit.equals(t, ignoreCase = true)) return cur
+        }
+        return null
+    }
+
+    /**
+     * Il piatto che corrisponde al titolo di un evento senza dati, cercato in quest'ordine:
+     * 1. un piatto con quel titolo in un menu salvato nel telefono per la stessa settimana (ingredienti esatti)
+     * 2. una ricetta con quel nome
+     * 3. un piatto con quel titolo cambiato in un altro menu salvato nel telefono
+     * 4. una ricetta da cui si arriva a quel titolo sostituendo, togliendo o aggiungendo ingredienti (vedi ricostruisci)
+     * 5. se approssimato = true, la ricetta col nome più simile (almeno una parola in comune), con gli ingredienti originali
+     */
+    fun riconosci(titolo: String, noti: PiattiNoti = PiattiNoti(), approssimato: Boolean = true): Riconosciuto? {
+        val t = titolo.trim()
+        if (t.isEmpty()) return null
+        val k = t.lowercase(Locale.ITALY)
+        noti.stessaSettimana[k]?.let { return Riconosciuto(it.first, it.second, true) }
+        recipes.firstOrNull { it.nome.equals(t, ignoreCase = true) }?.let { return Riconosciuto(it, null, true) }
+        noti.altri[k]?.let { return Riconosciuto(it.first, it.second, true) }
+        val pt = paroleChiave(t)
+        if (pt.isEmpty()) return null
+        val candidati = recipes
+            .map { r ->
+                val pr = paroleRicette.getValue(r.nome)
+                r to pt.intersect(pr).size.toDouble() / pt.union(pr).size
+            }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+        for ((r, _) in candidati.take(12)) {
+            val mod = ricostruisci(r, t)
+            if (mod != null) return Riconosciuto(r.copy(ing = mod), t, true)
+        }
+        if (!approssimato) return null
+        val migliore = candidati.firstOrNull() ?: return null
+        return Riconosciuto(migliore.first, t, false)
+    }
+
     /**
      * Ricostruisce il menu della settimana che parte da quel lunedì a partire dagli eventi del calendario, così come sono:
      * un pasto tolto o spostato nel calendario risulta tolto o spostato anche nel menu.
      * - Il giorno è la data dell'evento; il pasto è quello scritto nei dati, oppure si ricava dall'ora.
+     * - Gli eventi con i dati del pasto danno il piatto esatto; quelli senza dati (versioni precedenti) si riconoscono
+     *   dal titolo (vedi riconosci) e, se non sono sicuramente dell'app, contano solo dalle 10 a mezzanotte.
      * - Un pranzo con gli avanzi si collega alla cena del giorno prima se c'è ed è lo stesso piatto;
      *   altrimenti diventa un pasto normale (come quando si toglie quella cena dall'app).
-     * - Se due eventi cadono nello stesso pasto dello stesso giorno, si tiene il primo.
+     * - Se più eventi cadono nello stesso pasto dello stesso giorno, si tiene quello riconosciuto meglio
+     *   e, a parità, quello più vicino all'ora del pasto.
      */
-    fun daCalendario(lunedi: LocalDate, eventi: List<PastoCalendario>): MenuCalendario {
+    fun daCalendario(lunedi: LocalDate, eventi: List<PastoCalendario>, noti: PiattiNoti = PiattiNoti()): MenuCalendario {
+        class Candidato(val slot: Slot, val avanzi: Boolean, val qualita: Int, val distanza: Int)
         var nonRiconosciuti = 0
-        val trovati = LinkedHashMap<Pair<Int, String>, Slot>()
-        val conAvanzi = HashSet<Pair<Int, String>>()
+        val migliori = LinkedHashMap<Pair<Int, String>, Candidato>()
         for (e in eventi.sortedWith(compareBy({ it.data }, { it.ora }))) {
             val day = ChronoUnit.DAYS.between(lunedi, e.data).toInt()
             if (day !in 0..6) continue
+            if (!e.sicuro && e.ora !in 10..23) continue
             val meal = e.pasto?.takeIf { it == "Pranzo" || it == "Cena" } ?: if (e.ora < 17) "Pranzo" else "Cena"
-            val chiave = Pair(day, meal)
-            if (chiave in trovati) continue
-            var r = byName[e.ricetta ?: e.titolo.removeSuffix(SUFFISSO_AVANZI)]
-            if (r == null) {
-                nonRiconosciuti++
-                continue
+            val daiDati = e.ricetta?.let { byName[it] }
+            val r: Recipe
+            val titolo: String?
+            val qualita: Int
+            if (daiDati != null) {
+                val mod = e.ingredienti
+                r = if (mod != null && mod.isNotEmpty() && mod.keys.all { it in ing }) daiDati.copy(ing = mod) else daiDati
+                titolo = e.titoloMio
+                qualita = 3
+            } else {
+                val ric = riconosci(e.titolo.removeSuffix(SUFFISSO_AVANZI), noti)
+                if (ric == null) {
+                    if (e.sicuro) nonRiconosciuti++
+                    continue
+                }
+                r = ric.ricetta
+                titolo = ric.titolo
+                qualita = if (ric.esatto) 2 else 1
             }
-            val mod = e.ingredienti
-            if (mod != null && mod.isNotEmpty() && mod.keys.all { it in ing }) r = r.copy(ing = mod)
-            trovati[chiave] = Slot(day, meal, r, 1, null, e.titoloMio)
-            if (e.avanzi ?: e.titolo.endsWith(SUFFISSO_AVANZI)) conAvanzi.add(chiave)
+            val avanzi = e.avanzi ?: e.titolo.endsWith(SUFFISSO_AVANZI)
+            val c = Candidato(Slot(day, meal, r, 1, null, titolo), avanzi, qualita, abs(e.ora - (if (meal == "Pranzo") 13 else 20)))
+            val chiave = Pair(day, meal)
+            val prima = migliori[chiave]
+            if (prima == null || c.qualita > prima.qualita || (c.qualita == prima.qualita && c.distanza < prima.distanza)) {
+                migliori[chiave] = c
+            }
         }
-        val out = trovati.values.sortedWith(compareBy({ it.day }, { if (it.meal == "Pranzo") 0 else 1 })).toMutableList()
+        val conAvanzi = migliori.filterValues { it.avanzi }.keys
+        val out = migliori.values.map { it.slot }.sortedWith(compareBy({ it.day }, { if (it.meal == "Pranzo") 0 else 1 })).toMutableList()
         for (i in out.indices) {
             val s = out[i]
             if (s.meal != "Pranzo" || Pair(s.day, s.meal) !in conAvanzi) continue
@@ -262,7 +408,7 @@ class Catalog(val ing: Map<String, Ingredient>, val recipes: List<Recipe>) {
             out[j] = out[j].copy(mult = 2)
             out[i] = s.copy(recipe = out[j].recipe, titolo = out[j].titolo, from = j)
         }
-        return MenuCalendario(lunedi, out, nonRiconosciuti)
+        return MenuCalendario(lunedi, out, nonRiconosciuti, migliori.values.count { it.qualita == 1 })
     }
 
     /**

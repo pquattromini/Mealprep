@@ -65,7 +65,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.core.content.ContextCompat
-import java.text.Normalizer
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -592,10 +591,6 @@ fun PickDialog(cat: Catalog, exclude: Set<String>, onPick: (String) -> Unit, onC
 }
 
 // ---- Scelta di un'altra ricetta per un pasto ----
-/** Testo senza accenti e in minuscolo, per la ricerca: "pure" trova anche "Purè". */
-fun perRicerca(s: String): String =
-    Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").lowercase(Locale.ITALY)
-
 /**
  * Le ricette che contengono tutte le parole cercate, in qualsiasi ordine ("pollo zucchine" trova
  * "Pollo con zucchine"), ordinate per nome. Quella attuale non c'è.
@@ -999,7 +994,7 @@ fun RecuperaButton(m: Model) {
     fun apriCalendario() {
         errore = null
         settimane = try {
-            CalendarSync.leggiMenu(ctx, m.catalog)
+            CalendarSync.leggiMenu(ctx, m.catalog, m.piattiNoti())
         } catch (e: Exception) {
             errore = "Non sono riuscito a leggere il calendario."
             emptyList()
@@ -1092,7 +1087,8 @@ fun RecuperaButton(m: Model) {
                     } else {
                         Text("Il menu torna com'è adesso nel calendario: se lì hai tolto o spostato un pasto, lo ritrovi così.")
                         for (w in settimane) {
-                            val extra = if (w.nonRiconosciuti > 0) "\n${w.nonRiconosciuti} pasti non riconosciuti, saltati" else ""
+                            val extra = (if (w.approssimati > 0) "\n${w.approssimati} riconosciuti solo dal nome: controlla gli ingredienti" else "") +
+                                (if (w.nonRiconosciuti > 0) "\n${w.nonRiconosciuti} pasti non riconosciuti, saltati" else "")
                             Choice("Dal " + dataIt(w.lunedi) + "\n" + w.pasti.size + " pasti" + extra, false, Modifier.fillMaxWidth()) {
                                 if (m.recuperaDaCalendario(w)) fase = null
                             }

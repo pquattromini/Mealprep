@@ -11,6 +11,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
+import java.util.Locale
 
 data class CalInfo(val id: Long, val nome: String, val account: String, val scrivibile: Boolean, val sincronizzato: Boolean)
 
@@ -53,6 +54,14 @@ object CalendarSync {
         return o
     }
 
+    /** Gli id di tutti gli eventi che l'app ricorda di aver creato (di tutte le settimane ricordate). */
+    private fun idRicordati(ctx: Context): Set<Long> {
+        val o = leggiEventi(ctx)
+        return o.keys().asSequence().toList()
+            .flatMap { k -> o.optString(k, "").split(",").mapNotNull { it.trim().toLongOrNull() } }
+            .toSet()
+    }
+
     /** Tutti i calendari che il telefono conosce, con l'indicazione se si può scrivere e se sono sincronizzati con Google. */
     fun calendars(ctx: Context): List<CalInfo> {
         val out = ArrayList<CalInfo>()
@@ -91,18 +100,23 @@ object CalendarSync {
         return out
     }
 
-    /** Un evento messo dalle versioni precedenti dell'app (senza dati): all'ora del pranzo o della cena e col nome di un piatto. */
-    private fun sembraDelMenu(titolo: String, inizio: ZonedDateTime, nomi: Set<String>): Boolean {
+    /**
+     * Un evento delle versioni precedenti (senza dati) da sostituire quando rimandi la settimana: deve essere esattamente
+     * all'ora del pranzo o della cena e il titolo deve corrispondere con certezza a un piatto (nome di una ricetta, titolo
+     * di un piatto del menu che stai inviando, o titolo cambiato ricostruibile). Il confronto per somiglianza qui non si usa,
+     * per non cancellare un evento scritto da te.
+     */
+    private fun vecchioDaSostituire(titolo: String, inizio: ZonedDateTime, cat: Catalog, noti: PiattiNoti): Boolean {
         val oraPasto = inizio.minute == 0 && (inizio.hour == ORA_PRANZO || inizio.hour == ORA_CENA)
-        return oraPasto && titolo.removeSuffix(SUFFISSO_AVANZI) in nomi
+        return oraPasto && cat.riconosci(titolo.removeSuffix(SUFFISSO_AVANZI), noti, approssimato = false) != null
     }
 
     /**
      * Eventi di quella settimana, in quel calendario, messi dall'app: quelli con i dati del pasto nella descrizione
-     * (anche se nel calendario li hai spostati di ora), più quelli delle versioni precedenti riconoscibili da ora e nome.
+     * (anche se nel calendario li hai spostati di ora), più quelli delle versioni precedenti riconoscibili con certezza.
      * Servono quando l'app non ha più gli id.
      */
-    private fun eventiDelMenu(ctx: Context, calId: Long, start: LocalDate, nomi: Set<String>, zone: ZoneId): Set<Long> {
+    private fun eventiDelMenu(ctx: Context, calId: Long, start: LocalDate, cat: Catalog, noti: PiattiNoti, zone: ZoneId): Set<Long> {
         val out = HashSet<Long>()
         val da = start.atStartOfDay(zone).toInstant().toEpochMilli()
         val a = start.plusDays(7).atStartOfDay(zone).toInstant().toEpochMilli()
@@ -121,7 +135,7 @@ object CalendarSync {
                 val titolo = c.getString(1) ?: ""
                 val inizio = Instant.ofEpochMilli(c.getLong(2)).atZone(zone)
                 val nostro = (c.getString(3) ?: "").contains(MARCATORE)
-                if (nostro || sembraDelMenu(titolo, inizio, nomi)) out.add(c.getLong(0))
+                if (nostro || vecchioDaSostituire(titolo, inizio, cat, noti)) out.add(c.getLong(0))
             }
         }
         return out
@@ -154,12 +168,12 @@ object CalendarSync {
     }
 
     /**
-     * Il pasto rappresentato da un evento, oppure null se l'evento non è stato messo dall'app.
-     * Se i dati nella descrizione non si leggono (per esempio perché la descrizione è stata modificata), resta il titolo.
+     * Il pasto rappresentato da un evento. ricordato = l'app ricorda di averlo creato.
+     * Se i dati nella descrizione non si leggono (per esempio perché la descrizione è stata modificata) o mancano
+     * (versioni precedenti), resta il titolo: il piatto si riconosce da quello (vedi Catalog.daCalendario).
      */
-    internal fun pastoDaEvento(titolo: String, inizio: ZonedDateTime, descrizione: String?, nomi: Set<String>): PastoCalendario? {
+    internal fun pastoDaEvento(titolo: String, inizio: ZonedDateTime, descrizione: String?, ricordato: Boolean): PastoCalendario {
         val nostro = descrizione?.contains(MARCATORE) == true
-        if (!nostro && !sembraDelMenu(titolo, inizio, nomi)) return null
         val d = leggiDati(descrizione)
         val io = d?.optJSONObject("i")
         return PastoCalendario(
@@ -171,6 +185,7 @@ object CalendarSync {
             avanzi = d?.optBoolean("a", false),
             titoloMio = d?.optString("t", "")?.ifEmpty { null },
             ingredienti = io?.keys()?.asSequence()?.associateWith { k -> io.getDouble(k) },
+            sicuro = nostro || ricordato,
         )
     }
 
@@ -179,22 +194,29 @@ object CalendarSync {
 
     /**
      * I menu che si trovano nel calendario, settimana per settimana, dalla più recente: dalle SETTIMANE_INDIETRO
-     * settimane passate alle SETTIMANE_AVANTI future. Legge gli eventi con i dati del pasto in qualsiasi calendario
-     * e, nel calendario usato per l'ultimo invio, anche quelli messi dalle versioni precedenti.
+     * settimane passate alle SETTIMANE_AVANTI future. Legge gli eventi con i dati del pasto in qualsiasi calendario,
+     * quelli che l'app ricorda di aver creato e tutti gli eventi del calendario usato per l'ultimo invio (che è dedicato
+     * ai pasti): quelli senza dati si riconoscono dal titolo, anche cambiato. noti dà, per ogni settimana, i piatti dei
+     * menu salvati nel telefono, per riconoscere i titoli cambiati con gli ingredienti esatti.
      */
-    fun leggiMenu(ctx: Context, cat: Catalog): List<MenuCalendario> {
+    fun leggiMenu(ctx: Context, cat: Catalog, noti: (LocalDate) -> PiattiNoti = { PiattiNoti() }): List<MenuCalendario> {
         val zone = ZoneId.systemDefault()
         val oggi = LocalDate.now()
         val da = oggi.minusWeeks(SETTIMANE_INDIETRO).atStartOfDay(zone).toInstant().toEpochMilli()
         val a = oggi.plusWeeks(SETTIMANE_AVANTI).atStartOfDay(zone).toInstant().toEpochMilli()
         val calSalvato = savedCalendar(ctx) ?: -1L
-        val nomi = cat.recipes.map { it.nome }.toSet()
+        val ricordati = idRicordati(ctx)
         val sel = CalendarContract.Events.DELETED + " = 0 AND " +
             CalendarContract.Events.DTSTART + " >= ? AND " +
             CalendarContract.Events.DTSTART + " < ? AND (" +
             CalendarContract.Events.DESCRIPTION + " LIKE ? OR " +
-            CalendarContract.Events.CALENDAR_ID + " = ?)"
-        val proj = arrayOf(CalendarContract.Events.TITLE, CalendarContract.Events.DTSTART, CalendarContract.Events.DESCRIPTION)
+            CalendarContract.Events.CALENDAR_ID + " = ?" +
+            (if (ricordati.isEmpty()) "" else " OR " + CalendarContract.Events._ID + " IN (" + ricordati.joinToString(",") + ")") +
+            ")"
+        val proj = arrayOf(
+            CalendarContract.Events.TITLE, CalendarContract.Events.DTSTART, CalendarContract.Events.DESCRIPTION,
+            CalendarContract.Events._ID,
+        )
         val pasti = ArrayList<PastoCalendario>()
         ctx.contentResolver.query(
             CalendarContract.Events.CONTENT_URI, proj, sel,
@@ -202,13 +224,12 @@ object CalendarSync {
         )?.use { c ->
             while (c.moveToNext()) {
                 val inizio = Instant.ofEpochMilli(c.getLong(1)).atZone(zone)
-                val p = pastoDaEvento(c.getString(0) ?: "", inizio, c.getString(2), nomi)
-                if (p != null) pasti.add(p)
+                pasti.add(pastoDaEvento(c.getString(0) ?: "", inizio, c.getString(2), c.getLong(3) in ricordati))
             }
         }
         return pasti
             .groupBy { it.data.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) }
-            .map { (lunedi, l) -> cat.daCalendario(lunedi, l) }
+            .map { (lunedi, l) -> cat.daCalendario(lunedi, l, noti(lunedi)) }
             .filter { it.pasti.isNotEmpty() }
             .sortedByDescending { it.lunedi }
     }
@@ -223,10 +244,10 @@ object CalendarSync {
         val zone = ZoneId.systemDefault()
         val settimane = leggiEventi(ctx)
 
-        // 1. gli eventi precedenti di questa settimana: quelli di cui l'app ricorda l'id, più quelli riconoscibili dal nome
+        // 1. gli eventi precedenti di questa settimana: quelli di cui l'app ricorda l'id, più quelli riconoscibili
         val salvati = settimane.optString(start.toString(), "").split(",").mapNotNull { it.trim().toLongOrNull() }
-        val nomiPiatti = (cat.recipes.map { it.nome } + slots.mapNotNull { it.titolo }).toSet()
-        val vecchi = ancoraPresenti(ctx, salvati) + eventiDelMenu(ctx, calId, start, nomiPiatti, zone)
+        val piatti = PiattiNoti(stessaSettimana = slots.associate { (it.titolo ?: it.recipe.nome).trim().lowercase(Locale.ITALY) to Pair(it.recipe, it.titolo) })
+        val vecchi = ancoraPresenti(ctx, salvati) + eventiDelMenu(ctx, calId, start, cat, piatti, zone)
         var tolti = 0
         for (id in vecchi) {
             try {

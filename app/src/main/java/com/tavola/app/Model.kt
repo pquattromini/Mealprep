@@ -209,6 +209,33 @@ class Model(ctx: Context) {
         prefs.edit().putString("salvati", tutti.toString()).apply()
     }
 
+    /**
+     * I piatti dei menù salvati nel telefono (e del menù mostrato), per riconoscere nel calendario gli eventi delle versioni
+     * precedenti che hanno solo il titolo: per una settimana valgono tutti i piatti dei menù di quella settimana,
+     * per le altre solo quelli con il titolo cambiato.
+     */
+    fun piattiNoti(): (LocalDate) -> PiattiNoti {
+        val tutti = leggiSalvati()
+        val menu = ArrayList<Pair<String, List<Slot>>>()
+        val attuale = plan
+        if (attuale != null) menu.add(Pair(inizioMenu?.toString() ?: "", attuale))
+        for (k in tutti.keys().asSequence().toList()) {
+            val o = tutti.optJSONObject(k) ?: continue
+            val p = decode(o.optString("p", "")) ?: continue
+            menu.add(Pair(o.optString("s", ""), p))
+        }
+        fun chiave(s: Slot) = (s.titolo ?: s.recipe.nome).trim().lowercase(Locale.ITALY)
+        val altri = HashMap<String, Pair<Recipe, String?>>()
+        for ((_, p) in menu) for (s in p) if (s.titolo != null) altri.putIfAbsent(chiave(s), Pair(s.recipe, s.titolo))
+        return { lunedi ->
+            val stessa = HashMap<String, Pair<Recipe, String?>>()
+            for ((settimana, p) in menu) {
+                if (settimana == lunedi.toString()) for (s in p) stessa.putIfAbsent(chiave(s), Pair(s.recipe, s.titolo))
+            }
+            PiattiNoti(stessa, altri)
+        }
+    }
+
     /** Mostra il menù ricostruito dal calendario per quella settimana. */
     fun recuperaDaCalendario(mc: MenuCalendario): Boolean {
         val p = mc.pasti
