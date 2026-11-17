@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup automatico (Android 11 e precedenti): tutto tranne foto e video (troppo grandi) e la chiave API -->
+<full-backup-content>
+    <exclude domain="file" path="media/" />
+    <exclude domain="file" path="chat/" />
+    <exclude domain="file" path="miniature/" />
+    <exclude domain="sharedpref" path="segreti.xml" />
+</full-backup-content>

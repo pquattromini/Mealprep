@@ -5,18 +5,18 @@ plugins {
 }
 
 android {
-    namespace = "com.tavola.app"
+    namespace = "com.pancy.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.tavola.app"
+        applicationId = "com.pancy.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 10
+        versionName = "1.9"
     }
 
-    // Chiave di firma fissa: così ogni nuova versione si installa sopra la precedente senza disinstallare
+    // Chiave di firma fissa: così ogni nuova versione si installa sopra la precedente senza perdere i dati
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -40,8 +40,12 @@ android {
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // accesso a Google Drive (autorizzazione con l'account Google)
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 }

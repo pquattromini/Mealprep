@@ -1,22 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Solo se attivi la copia degli appuntamenti nel calendario del telefono -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- Per "Chiedi all'IA" (collegamento a OpenAI) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Per i messaggi vocali all'IA (si chiede solo quando tocchi il microfono) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- Per leggere ad alta voce le risposte dell'IA con la sintesi vocale del telefono -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="MealYourWeek"
-        android:theme="@style/Theme.Tavola">
+        android:label="Pancy"
+        android:theme="@style/Theme.Pancy">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Tavola.Avvio">
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Pancy.Avvio">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Permette di passare i file delle foto alla fotocamera e alle app con cui si condivide -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

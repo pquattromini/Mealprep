@@ -1,0 +1,357 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.pancy.app
+
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import java.io.File
+import java.time.LocalDate
+
+@Composable
+fun FotoScreen(m: Model, snack: SnackbarHostState) {
+    val cs = MaterialTheme.colorScheme
+    val aggiungi = rememberAggiuntaMedia(m, null)
+    Scaffold(
+        topBar = { BarraSuperiore(m, Sezione.FOTO.titolo) },
+        bottomBar = { BarraSezioni(m) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = aggiungi,
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("Aggiungi") },
+            )
+        },
+        snackbarHost = { SnackbarHost(snack) },
+        containerColor = cs.background,
+    ) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad)) {
+            AvvisoDrive(m, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            if (m.importazioni > 0) InCopia()
+            if (m.driveInSync) {
+                Text(
+                    "Sincronizzo con Google Drive…", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            PulsanteAlbum(m, ALBUM_GENITORI)
+            val galleria = m.galleria
+            if (galleria.isEmpty()) {
+                VuotoSezione(
+                    painterResource(R.drawable.ic_foto),
+                    "Nessuna foto o video",
+                    "Il pancione settimana dopo settimana, le ecografie, i momenti da ricordare. " +
+                        "Tocca «Aggiungi» per sceglierli dalla galleria o scattarli ora.",
+                )
+            } else {
+                GrigliaMedia(m, galleria) { m.vai(Schermata.Visore(it.id)) }
+            }
+        }
+    }
+}
+
+/** Nome da mostrare per un album a parte. */
+fun nomeAlbum(nome: String): String = when (nome) {
+    ALBUM_GENITORI -> "Mamma e papà"
+    else -> "Album"
+}
+
+/** Il pulsante in cima alla sezione Foto che apre l'album di mamma e papà. */
+@Composable
+private fun PulsanteAlbum(m: Model, nome: String) {
+    val cs = MaterialTheme.colorScheme
+    val quanti = m.album(nome).size
+    Card(
+        onClick = { m.vai(Schermata.Album(nome)) },
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = cs.secondaryContainer, contentColor = cs.onSecondaryContainer),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Favorite, contentDescription = null, tint = cs.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(nomeAlbum(nome), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    when (quanti) {
+                        0 -> "Le vostre foto e i vostri video, anche fuori dalla gravidanza"
+                        1 -> "1 foto o video"
+                        else -> "$quanti foto e video"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+        }
+    }
+}
+
+/** Un album a parte (mamma e papà): foto e video divisi per mese, collegati alla loro cartella di Drive. */
+@Composable
+fun AlbumScreen(m: Model, nome: String, snack: SnackbarHostState) {
+    val cs = MaterialTheme.colorScheme
+    val aggiungi = rememberAggiuntaMedia(m, null, null, nome)
+    val lista = m.album(nome)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(nomeAlbum(nome))
+                        Text(
+                            if (lista.size == 1) "1 foto o video" else "${lista.size} foto e video",
+                            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { m.indietro() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.background),
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = aggiungi,
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("Aggiungi") },
+            )
+        },
+        snackbarHost = { SnackbarHost(snack) },
+        containerColor = cs.background,
+    ) { pad ->
+        Column(Modifier.fillMaxSize().padding(pad)) {
+            AvvisoDrive(m, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            if (m.importazioni > 0) InCopia()
+            if (m.driveInSync) {
+                Text(
+                    "Sincronizzo con Google Drive…", style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            if (m.driveCollegato && m.cartellaFoto != null && m.cartellaGen == null) {
+                AppCard(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Text(
+                        "Queste foto restano solo sul telefono finché non scegli la loro cartella su Google Drive. " +
+                            "Con la cartella, quello che ci metti compare qui da solo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    TextButton(onClick = { m.vai(Schermata.Impostazioni) }, contentPadding = PaddingValues(0.dp)) {
+                        Text("Scegli la cartella nelle Impostazioni ›", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            if (lista.isEmpty()) {
+                VuotoSezione(
+                    painterResource(R.drawable.ic_foto),
+                    "Ancora niente",
+                    "Le foto e i video di voi due: viaggi, feste, momenti insieme, anche di prima della gravidanza. " +
+                        "Tocca «Aggiungi», oppure collega la loro cartella di Google Drive nelle Impostazioni.",
+                )
+            } else {
+                GrigliaMedia(m, lista, perMese = true) { m.vai(Schermata.Visore(it.id, album = nome)) }
+            }
+        }
+    }
+}
+
+/** Barra che avvisa che foto, video o PDF si stanno copiando. */
+@Composable
+fun InCopia() {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            "Copio i file nell'app…", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
+    }
+}
+
+/** Titolo del gruppo in cui finisce una foto: la settimana di gravidanza o, se non c'è, il mese. */
+fun gruppoMedia(d: LocalDate, dpp: LocalDate?): String {
+    if (dpp != null) {
+        if (d.isBefore(Gravidanza.inizio(dpp))) return "Prima della gravidanza"
+        val g = Gravidanza.giorni(dpp, d)
+        if (g != null) return "Settimana ${g / 7}"
+    }
+    return mese(d)
+}
+
+/** Griglia a tre colonne, divisa per settimana di gravidanza (o per mese; sempre per mese con [perMese]). */
+@Composable
+fun GrigliaMedia(m: Model, lista: List<Media>, perMese: Boolean = false, onApri: (Media) -> Unit) {
+    val dpp = m.dpp
+    val gruppi = remember(lista, dpp, perMese) { lista.groupBy { if (perMese) mese(it.data) else gruppoMedia(it.data, dpp) } }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for ((titolo, gruppo) in gruppi) {
+            item(key = "g-$titolo", span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.padding(top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
+                    Text(titolo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        if (gruppo.size == 1) "1 elemento" else "${gruppo.size} elementi",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            items(gruppo, key = { it.id }) { med -> Miniatura(med) { onApri(med) } }
+        }
+    }
+}
+
+/** Apre un file toccato in una griglia: i PDF nel loro visore, foto e video a schermo intero. */
+fun Model.apriFile(med: Media, ecografia: String? = null, referto: String? = null) {
+    if (med.pdf) vai(Schermata.Documento(med.id)) else vai(Schermata.Visore(med.id, ecografia, referto))
+}
+
+/** Griglia semplice (non scorrevole da sola), da mettere dentro una pagina che scorre già. */
+@Composable
+fun GrigliaFissa(lista: List<Media>, onApri: (Media) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (riga in lista.chunked(3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (med in riga) Miniatura(med, Modifier.weight(1f)) { onApri(med) }
+                repeat(3 - riga.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * Prepara la scelta "PDF / galleria / foto / video" e restituisce la funzione che la apre.
+ * I file scelti vengono copiati nell'app, collegati a [ecografia], a [referto] o ad [album] se non sono null.
+ * I PDF si possono aggiungere solo a ecografie e referti; ai referti niente video.
+ */
+@Composable
+fun rememberAggiuntaMedia(m: Model, ecografia: String?, referto: String? = null, album: String? = null): () -> Unit {
+    val ctx = LocalContext.current
+    val conPdf = ecografia != null || referto != null
+    var dialogo by remember { mutableStateOf(false) }
+    // il file in cui la fotocamera sta scrivendo (salvato anche se Android chiude l'app nel frattempo)
+    var inAttesa by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val galleria = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+        m.importa(uris, ecografia, referto, album)
+    }
+    val documenti = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        m.importa(uris, ecografia, referto)
+    }
+    val foto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { _ ->
+        val p = inAttesa
+        inAttesa = null
+        if (p != null) m.dopoScatto(File(p), video = false, ecografia = ecografia, referto = referto, album = album)
+    }
+    val video = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { _ ->
+        val p = inAttesa
+        inAttesa = null
+        if (p != null) m.dopoScatto(File(p), video = true, ecografia = ecografia, referto = referto, album = album)
+    }
+
+    fun scatta(eVideo: Boolean) {
+        val f = Galleria.nuovoFile(ctx, if (eVideo) "mp4" else "jpg")
+        inAttesa = f.path
+        try {
+            val u = Galleria.uri(ctx, f)
+            if (eVideo) video.launch(u) else foto.launch(u)
+        } catch (e: ActivityNotFoundException) {
+            inAttesa = null
+            m.messaggio = "Non trovo un'app per la fotocamera."
+        }
+    }
+
+    if (dialogo) {
+        AlertDialog(
+            onDismissRequest = { dialogo = false },
+            title = { Text("Aggiungi") },
+            text = {
+                Column {
+                    if (conPdf) {
+                        SceltaAggiunta(
+                            painterResource(R.drawable.ic_referti), "Scegli un PDF",
+                            "Il referto scaricato dal sito del laboratorio o arrivato per email",
+                        ) {
+                            dialogo = false
+                            try {
+                                documenti.launch(arrayOf(MIME_PDF))
+                            } catch (e: ActivityNotFoundException) {
+                                m.messaggio = "Non trovo un'app per scegliere i file."
+                            }
+                        }
+                    }
+                    SceltaAggiunta(
+                        painterResource(R.drawable.ic_foto), "Scegli dalla galleria",
+                        if (referto != null) "Anche più foto insieme" else "Anche più foto e video insieme",
+                    ) {
+                        dialogo = false
+                        val tipo = if (referto != null) ActivityResultContracts.PickVisualMedia.ImageOnly
+                        else ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                        galleria.launch(PickVisualMediaRequest(tipo))
+                    }
+                    SceltaAggiunta(
+                        painterResource(R.drawable.ic_foto), if (referto != null) "Fotografa il foglio" else "Scatta una foto", null,
+                    ) {
+                        dialogo = false
+                        scatta(eVideo = false)
+                    }
+                    if (referto == null) {
+                        SceltaAggiunta(androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Filled.PlayArrow), "Registra un video", null) {
+                            dialogo = false
+                            scatta(eVideo = true)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { dialogo = false }) { Text("Annulla") } },
+        )
+    }
+    return { dialogo = true }
+}
+
+@Composable
+private fun SceltaAggiunta(icona: Painter, testo: String, sotto: String?, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icona, contentDescription = null, tint = cs.primary)
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text(testo, style = MaterialTheme.typography.bodyLarge)
+            if (sotto != null) Text(sotto, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
+    }
+}
