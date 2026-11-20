@@ -1,4 +1,44 @@
 [
+  {
+  "id": "cavolo cappuccio",
+  "nome": "Cavolo cappuccio",
+  "unita": "g",
+  "prezzo": 1.8,
+  "reparto": "Ortofrutta",
+  "carbo": 2,
+  "proteine": 2,
+  "grassi": 0
+ },
+ {
+  "id": "feta",
+  "nome": "Feta",
+  "unita": "g",
+  "prezzo": 1.8,
+  "reparto": "Dispensa",
+  "carbo": 3,
+  "proteine": 15,
+  "grassi": 20
+ },
+ {
+  "id": "hamburger",
+  "nome": "Hamburger",
+  "unita": "g",
+  "prezzo": 1.8,
+  "reparto": "Carne e pesce",
+  "carbo": 0,
+  "proteine": 20,
+  "grassi": 10
+ },
+ {
+  "id": "couscous",
+  "nome": "Cous-cous",
+  "unita": "g",
+  "prezzo": 1.8,
+  "reparto": "Dispensa",
+  "carbo": 75,
+  "proteine": 13,
+  "grassi": 1.5
+ },
  {
   "id": "pasta",
   "nome": "Pasta",
